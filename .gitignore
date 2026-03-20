@@ -1,0 +1,16 @@
+# IDE
+.idea/
+
+# Supabase
+supabase/.temp/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Node (if you add functions later)
+node_modules/
+
+# DS files
+.DS_Store
