@@ -24,6 +24,28 @@ Deno.serve(async (req) => {
       `Message from ${message.from?.first_name} (${message.from?.id}): ${message.text}`,
     );
 
+
+    if (message.text.trim() === "/start") {
+      const res = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: message.chat.id,
+            text: "Здравствуйте! Опишите вашу проблему, и мы поможем.",
+          }),
+        },
+      );
+
+      const resBody = await res.json();
+      if (!resBody.ok) {
+        console.error("Telegram API error:", resBody);
+      }
+
+      return new Response("OK", { status: 200 });
+    }
+
     const { error: dbError } = await supabase.from("messages").insert({
       chat_id: message.chat.id,
       user_id: message.from.id,
