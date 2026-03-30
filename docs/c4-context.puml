@@ -1,0 +1,18 @@
+@startuml C4_Context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title System Context Diagram - SupportBot
+
+Person(telegram_user, "Telegram User", "Пользователь, отправляющий сообщения через Telegram-бота для получения поддержки")
+Person(admin, "Admin", "Администратор, просматривающий входящие сообщения через веб-панель")
+
+System(supportbot, "SupportBot", "Система поддержки: принимает сообщения из Telegram, сохраняет в БД и отображает в админ-панели")
+
+System_Ext(telegram_api, "Telegram Bot API", "Внешний API Telegram для отправки/получения сообщений")
+
+Rel(telegram_user, telegram_api, "Отправляет сообщения", "Telegram Client")
+Rel(telegram_api, supportbot, "Пересылает сообщения через webhook", "HTTPS/JSON")
+Rel(supportbot, telegram_api, "Отправляет ответы пользователю", "HTTPS/JSON")
+Rel(admin, supportbot, "Просматривает сообщения", "HTTPS/Browser")
+
+@enduml

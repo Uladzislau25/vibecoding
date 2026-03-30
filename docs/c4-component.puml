@@ -1,0 +1,41 @@
+@startuml C4_Component
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Component Diagram - SupportBot
+
+Person(admin, "Admin")
+System_Ext(telegram_api, "Telegram Bot API")
+
+Container_Boundary(edge_function, "Telegram Webhook Edge Function") {
+    Component(request_handler, "Request Handler", "Deno.serve", "Принимает HTTP POST запросы, парсит JSON body с данными Telegram Update")
+    Component(command_handler, "Command Handler", "TypeScript", "Обрабатывает команды бота: /start — отправляет приветствие")
+    Component(message_persister, "Message Persister", "Supabase JS Client", "Сохраняет сообщение в таблицу messages с метаданными пользователя")
+    Component(reply_sender, "Reply Sender", "fetch → Telegram API", "Формирует и отправляет ответное сообщение через sendMessage")
+}
+
+Container_Boundary(web_app, "Admin Dashboard (Next.js)") {
+    Component(page_component, "Messages Page", "React Server Component", "Async SSR-компонент: загружает данные, группирует по chat_id, рендерит UI")
+    Component(stats_header, "Stats Header", "React", "Отображает общее количество сообщений и уникальных пользователей")
+    Component(message_list, "Message List", "React", "Список сообщений, сгруппированных по пользователям, с аватарами и временными метками")
+    Component(supabase_client, "Supabase Client", "src/lib/supabase.ts", "Инициализация клиента Supabase с NEXT_PUBLIC переменными окружения")
+    Component(layout, "Root Layout", "React", "Корневой layout: мета-данные, шрифты Geist, глобальные стили Tailwind")
+}
+
+ContainerDb(database, "PostgreSQL", "Supabase")
+
+Rel(telegram_api, request_handler, "POST /functions/v1/telegram-webhook")
+Rel(request_handler, command_handler, "Если текст начинается с /start")
+Rel(request_handler, message_persister, "Передает данные сообщения")
+Rel(command_handler, reply_sender, "Отправляет приветствие")
+Rel(message_persister, database, "INSERT INTO messages")
+Rel(message_persister, reply_sender, "После сохранения отправляет ответ")
+Rel(reply_sender, telegram_api, "POST /bot/sendMessage")
+
+Rel(admin, layout, "Открывает /", "Browser")
+Rel(layout, page_component, "Рендерит страницу")
+Rel(page_component, supabase_client, "Использует клиент")
+Rel(supabase_client, database, "SELECT * FROM messages ORDER BY created_at")
+Rel(page_component, stats_header, "Передает messages[]")
+Rel(page_component, message_list, "Передает grouped messages")
+
+@enduml

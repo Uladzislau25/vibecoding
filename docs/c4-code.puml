@@ -1,0 +1,107 @@
+@startuml C4_Code
+title Code Diagram - Ключевые структуры данных и модули
+
+' === Database Schema ===
+package "Database Schema" {
+    entity "messages" as msg_table {
+        * id : bigint <<PK, auto>>
+        --
+        * chat_id : bigint
+        * user_id : bigint
+        username : varchar(32)
+        first_name : varchar(64)
+        last_name : varchar(64)
+        * text : text
+        * created_at : timestamptz
+    }
+}
+
+' === Edge Function (telegram-webhook/index.ts) ===
+package "telegram-webhook/index.ts" as webhook_pkg {
+    class "Deno.serve(handler)" as handler {
+        + req: Request
+        --
+        Проверяет метод POST
+        Парсит body как Telegram Update
+        Определяет тип: команда / сообщение
+        Возвращает Response(200)
+    }
+
+    class "TelegramUpdate" as tg_update <<interface>> {
+        + message.chat.id : number
+        + message.from.id : number
+        + message.from.username? : string
+        + message.from.first_name? : string
+        + message.from.last_name? : string
+        + message.text : string
+    }
+
+    class "SupabaseClient" as supa_edge {
+        + from("messages").insert(record)
+    }
+
+    class "sendMessage()" as send_msg {
+        + chat_id : number
+        + text : string
+        --
+        fetch("api.telegram.org/bot{token}/sendMessage")
+    }
+}
+
+' === Admin Dashboard ===
+package "support-admin/src" as admin_pkg {
+    class "src/lib/supabase.ts" as supa_client {
+        + supabase : SupabaseClient
+        --
+        createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    }
+
+    class "src/app/page.tsx" as page {
+        + Message : interface
+        --
+        async function Home()
+        .. SSR Data Fetching ..
+        supabase.from("messages")
+            .select("*")
+            .order("created_at", asc)
+        .. Grouping ..
+        groupedMessages: Record<number, Message[]>
+        .. Stats ..
+        totalMessages: number
+        uniqueUsers: number
+    }
+
+    class "Message" as msg_interface <<interface>> {
+        + id : number
+        + chat_id : number
+        + user_id : number
+        + username : string | null
+        + first_name : string | null
+        + last_name : string | null
+        + text : string
+        + created_at : string
+    }
+
+    class "src/app/layout.tsx" as layout {
+        + metadata : Metadata
+        --
+        title: "SupportBot - Сообщения"
+        fonts: Geist Sans, Geist Mono
+    }
+}
+
+' === Relations ===
+handler --> tg_update : парсит
+handler --> supa_edge : сохраняет сообщение
+handler --> send_msg : отправляет ответ
+supa_edge --> msg_table : INSERT
+send_msg --> tg_update : читает chat_id
+
+page --> supa_client : использует
+supa_client --> msg_table : SELECT
+page --> msg_interface : типизирует данные
+layout --> page : рендерит
+
+msg_interface ..> msg_table : маппинг строк таблицы
+
+@enduml

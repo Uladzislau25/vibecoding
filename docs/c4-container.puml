@@ -1,0 +1,24 @@
+@startuml C4_Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Container Diagram - SupportBot
+
+Person(telegram_user, "Telegram User", "Пользователь Telegram")
+Person(admin, "Admin", "Администратор")
+
+System_Ext(telegram_api, "Telegram Bot API", "Внешний API Telegram")
+
+System_Boundary(supportbot, "SupportBot System") {
+    Container(edge_function, "Telegram Webhook", "Deno / Supabase Edge Function", "Принимает webhook от Telegram, обрабатывает команды (/start), сохраняет сообщения в БД, отправляет ответы")
+    ContainerDb(database, "PostgreSQL Database", "Supabase / PostgreSQL 17", "Хранит таблицу messages: chat_id, user_id, username, first_name, last_name, text, created_at")
+    Container(web_app, "Admin Dashboard", "Next.js 16 / React 19 / TypeScript", "SSR веб-приложение: отображает сообщения, сгруппированные по пользователям, со статистикой")
+}
+
+Rel(telegram_user, telegram_api, "Отправляет сообщения")
+Rel(telegram_api, edge_function, "POST webhook", "HTTPS/JSON")
+Rel(edge_function, telegram_api, "Отправляет ответы", "HTTPS/JSON")
+Rel(edge_function, database, "INSERT сообщений", "Supabase JS Client")
+Rel(web_app, database, "SELECT сообщений", "Supabase JS Client")
+Rel(admin, web_app, "Просматривает дашборд", "HTTPS/Browser")
+
+@enduml
