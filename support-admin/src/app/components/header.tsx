@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { logout } from "@/app/login/actions";
 
@@ -17,6 +18,12 @@ export default async function Header() {
         </h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">{user.email}</span>
+          <Link
+            href="/reset-password"
+            className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors"
+          >
+            Сменить пароль
+          </Link>
           <form action={logout}>
             <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer">
               Выйти
