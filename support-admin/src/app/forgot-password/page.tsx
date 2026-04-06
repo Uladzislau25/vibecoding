@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { resetPassword } from "./actions";
+import RefreshOnFocus from "./refresh-on-focus";
 
 export default async function ForgotPasswordPage({
   searchParams,
@@ -10,6 +11,7 @@ export default async function ForgotPasswordPage({
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center px-4">
+      <RefreshOnFocus />
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
