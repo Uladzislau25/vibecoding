@@ -40,23 +40,18 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      <header className="sticky top-0 z-10 backdrop-blur-xl bg-[#f5f5f7]/80 border-b border-gray-200/60">
-        <div className="max-w-3xl mx-auto px-6 py-5">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-            SupportBot — Сообщения
-          </h1>
-          <div className="mt-2 flex gap-6 text-sm text-gray-500">
-            <span>
-              Сообщений: <span className="font-medium text-gray-700">{totalMessages}</span>
-            </span>
-            <span>
-              Пользователей: <span className="font-medium text-gray-700">{uniqueChats}</span>
-            </span>
-          </div>
+      <div className="max-w-3xl mx-auto px-6 py-4">
+        <div className="flex gap-6 text-sm text-gray-500">
+          <span>
+            Сообщений: <span className="font-medium text-gray-700">{totalMessages}</span>
+          </span>
+          <span>
+            Пользователей: <span className="font-medium text-gray-700">{uniqueChats}</span>
+          </span>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-10">
+      <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-10">
         {Object.entries(grouped).map(([chatId, chatMessages]) => {
           const display =
             chatMessages[0].first_name || chatMessages[0].username || `User ${chatId}`;
