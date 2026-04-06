@@ -21,11 +21,11 @@ export default function HeaderNav({
           href="/reset-password"
           className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors"
         >
-          Сменить паро��ь
+          Сменить пароль
         </Link>
         <form action={logoutAction}>
           <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer">
-            ��ыйти
+            Выйти
           </button>
         </form>
       </div>
@@ -49,14 +49,14 @@ export default function HeaderNav({
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-gray-200/60 px-4 py-4 flex flex-col gap-3">
+        <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-md border-b border-gray-200/60 px-4 py-4 flex flex-col gap-3 will-change-transform">
           <span className="text-sm text-gray-600">{email}</span>
           <Link
             href="/reset-password"
             onClick={() => setOpen(false)}
             className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors text-center"
           >
-            Сменить паро��ь
+            Сменить пароль
           </Link>
           <form action={logoutAction}>
             <button className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer">

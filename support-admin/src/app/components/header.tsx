@@ -11,7 +11,7 @@ export default async function Header() {
   if (!user) return null;
 
   return (
-    <header className="sticky top-0 z-10 backdrop-blur-xl bg-white/70 border-b border-gray-200/40 relative">
+    <header className="sticky top-0 z-10 backdrop-blur-md bg-white/80 border-b border-gray-200/40 relative will-change-transform">
       <div className="mx-auto px-4 md:px-[120px] py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight text-gray-900">
           SupportBot
