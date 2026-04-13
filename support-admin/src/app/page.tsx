@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const { data: messages, error } = await supabase
     .from("messages")
-    .select("id, text, created_at, client:clients(id, chat_id, user_id, username, first_name, last_name)")
+    .select("id, text, created_at, client:clients!inner(id, chat_id, user_id, username, first_name, last_name)")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -16,7 +16,7 @@ export default async function Home() {
     );
   }
 
-  const msgs = messages ?? [];
+  const msgs = (messages ?? []).filter((m) => m.client != null);
   const totalMessages = msgs.length;
   const uniqueChats = new Set(msgs.map((m) => m.client!.id)).size;
 
