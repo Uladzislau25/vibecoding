@@ -1,22 +1,11 @@
 import { supabase } from "@/lib/supabase";
 
-interface Message {
-  id: number;
-  chat_id: number;
-  user_id: number;
-  username: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  text: string;
-  created_at: string;
-}
-
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const { data: messages, error } = await supabase
     .from("messages")
-    .select("*")
+    .select("id, text, created_at, client:clients(id, chat_id, user_id, username, first_name, last_name)")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -27,14 +16,15 @@ export default async function Home() {
     );
   }
 
-  const msgs = (messages ?? []) as Message[];
+  const msgs = messages ?? [];
   const totalMessages = msgs.length;
-  const uniqueChats = new Set(msgs.map((m) => m.chat_id)).size;
+  const uniqueChats = new Set(msgs.map((m) => m.client!.id)).size;
 
-  // Group by chat_id
-  const grouped = msgs.reduce<Record<number, Message[]>>((acc, msg) => {
-    if (!acc[msg.chat_id]) acc[msg.chat_id] = [];
-    acc[msg.chat_id].push(msg);
+  // Group by client id
+  const grouped = msgs.reduce<Record<number, typeof msgs>>((acc, msg) => {
+    const clientId = msg.client!.id;
+    if (!acc[clientId]) acc[clientId] = [];
+    acc[clientId].push(msg);
     return acc;
   }, {});
 
@@ -52,26 +42,28 @@ export default async function Home() {
       </div>
 
       <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-10">
-        {Object.entries(grouped).map(([chatId, chatMessages]) => {
+        {Object.entries(grouped).map(([clientId, chatMessages]) => {
+          const client = chatMessages[0].client!;
           const display =
-            chatMessages[0].first_name || chatMessages[0].username || `User ${chatId}`;
+            client.first_name || client.username || `User ${clientId}`;
           return (
-            <section key={chatId}>
+            <section key={clientId}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
                   {display[0].toUpperCase()}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{display}</p>
-                  <p className="text-xs text-gray-400">Chat ID: {chatId}</p>
+                  <p className="text-xs text-gray-400">Chat ID: {client.chat_id}</p>
                 </div>
               </div>
 
               <div className="flex flex-col gap-3">
                 {chatMessages.map((msg) => {
-                  const name = [msg.first_name, msg.last_name]
+                  const c = msg.client!;
+                  const name = [c.first_name, c.last_name]
                     .filter(Boolean)
-                    .join(" ") || msg.username || `User ${msg.user_id}`;
+                    .join(" ") || c.username || `User ${c.user_id}`;
                   const time = new Date(msg.created_at).toLocaleString("ru-RU", {
                     day: "numeric",
                     month: "short",

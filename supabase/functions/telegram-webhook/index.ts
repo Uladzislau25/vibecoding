@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { Database } from "../_shared/database.types.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 
-const supabase = createClient(
+const supabase = createClient<Database>(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
@@ -46,12 +47,29 @@ Deno.serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // Upsert client by chat_id
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .upsert(
+        {
+          chat_id: message.chat.id,
+          user_id: message.from.id,
+          username: message.from.username ?? null,
+          first_name: message.from.first_name ?? null,
+          last_name: message.from.last_name ?? null,
+        },
+        { onConflict: "chat_id" },
+      )
+      .select("id")
+      .single();
+
+    if (clientError) {
+      console.error("Failed to upsert client:", clientError);
+      return new Response("OK", { status: 200 });
+    }
+
     const { error: dbError } = await supabase.from("messages").insert({
-      chat_id: message.chat.id,
-      user_id: message.from.id,
-      username: message.from.username ?? null,
-      first_name: message.from.first_name ?? null,
-      last_name: message.from.last_name ?? null,
+      client_id: client.id,
       text: message.text,
     });
 
