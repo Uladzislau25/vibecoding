@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("id, chat_id, user_id, username, first_name, last_name, messages(id, text, created_at)")
+    .select("id, chat_id, user_id, username, first_name, last_name, messages(id, text, created_at), client_assignments(assigned_manager_id, manager:managers!client_assignments_assigned_manager_id_fkey(name))")
     .order("created_at", { referencedTable: "messages", ascending: false })
     .limit(1, { referencedTable: "messages" });
 
@@ -69,6 +69,11 @@ export default async function Home() {
                 <p className="text-sm text-gray-500 truncate mt-0.5">
                   {lastMsg.text}
                 </p>
+                {client.client_assignments?.manager?.name && (
+                  <p className="text-xs text-blue-500 mt-1">
+                    {client.client_assignments.manager.name}
+                  </p>
+                )}
               </div>
             </Link>
           );
