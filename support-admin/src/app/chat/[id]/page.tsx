@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ManagerSelect from "./manager-select";
 
 export const dynamic = "force-dynamic";
 
@@ -13,28 +12,19 @@ export default async function ChatPage({
   const { id } = await params;
   const clientId = Number(id);
 
-  const [clientRes, messagesRes, managersRes, assignmentRes] = await Promise.all([
+  const [clientRes, messagesRes] = await Promise.all([
     supabase.from("clients").select("*").eq("id", clientId).single(),
     supabase
       .from("messages")
       .select("id, text, created_at")
       .eq("client_id", clientId)
       .order("created_at", { ascending: true }),
-    supabase.from("managers").select("id, name, position").order("name"),
-    supabase
-      .from("client_assignments")
-      .select("assigned_manager_id")
-      .eq("client_id", clientId)
-      .single(),
   ]);
 
   if (clientRes.error || !clientRes.data) return notFound();
 
   const client = clientRes.data;
   const messages = messagesRes.data ?? [];
-  const managers = managersRes.data ?? [];
-  const currentManagerId = assignmentRes.data?.assigned_manager_id ?? null;
-
   const display =
     [client.first_name, client.last_name].filter(Boolean).join(" ") ||
     client.username ||
@@ -42,7 +32,7 @@ export default async function ChatPage({
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      <div className="max-w-3xl mx-auto px-6 py-4 flex flex-col gap-3">
+      <div className="max-w-3xl mx-auto px-6 py-4">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -73,12 +63,6 @@ export default async function ChatPage({
             </p>
           </div>
         </div>
-
-        <ManagerSelect
-          clientId={clientId}
-          managers={managers}
-          currentManagerId={currentManagerId}
-        />
       </div>
 
       <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-3">
