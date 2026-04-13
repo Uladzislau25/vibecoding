@@ -1,0 +1,59 @@
+@startuml
+
+skinparam titleFontSize 18
+skinparam sequenceArrowThickness 2
+skinparam sequenceParticipantFontSize 13
+skinparam sequenceMessageFontSize 12
+
+title Assign / Unassign Manager
+
+actor "Manager" as manager
+participant "UI" as ui
+participant "Backend" as api
+database "managers" as db_managers
+database "client_assignments" as db_ca
+
+== Assign себя ==
+
+manager -> ui : Нажимает "Assign me"
+ui -> api : POST /assign { client_id, manager_id }
+api -> db_managers : SELECT manager by id
+db_managers --> api : manager found
+
+alt client_assignment существует
+  api -> db_ca : UPDATE SET\nassigned_manager_id = manager_id,\nassigned_by_manager_id = manager_id,\nassigned_at = now()
+else client_assignment не существует
+  api -> db_ca : INSERT (\nclient_id,\nassigned_manager_id = manager_id,\nassigned_by_manager_id = manager_id,\nassigned_at = now()\n)
+end
+
+db_ca --> api : OK
+api --> ui : 200 OK
+ui --> manager : Показывает assigned
+
+== Assign другого менеджера ==
+
+manager -> ui : Выбирает другого менеджера\nи нажимает "Assign"
+ui -> api : POST /assign { client_id,\nmanager_id = other_id }
+api -> db_managers : SELECT manager by other_id
+db_managers --> api : manager found
+
+alt client_assignment существует
+  api -> db_ca : UPDATE SET\nassigned_manager_id = other_id,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()
+else client_assignment не существует
+  api -> db_ca : INSERT (\nclient_id,\nassigned_manager_id = other_id,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()\n)
+end
+
+db_ca --> api : OK
+api --> ui : 200 OK
+ui --> manager : Показывает assigned
+
+== Unassign ==
+
+manager -> ui : Нажимает "Unassign"
+ui -> api : POST /unassign { client_id }
+api -> db_ca : UPDATE SET\nassigned_manager_id = NULL,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()
+db_ca --> api : OK
+api --> ui : 200 OK
+ui --> manager : Показывает unassigned
+
+@enduml

@@ -1,0 +1,66 @@
+@startuml
+
+skinparam linetype polyline
+skinparam entity {
+  BackgroundColor #FEFECE
+  BorderColor #A80036
+  FontSize 13
+}
+skinparam ArrowColor #555555
+skinparam ArrowThickness 2
+skinparam ArrowFontSize 12
+skinparam ArrowFontColor #333333
+skinparam titleFontSize 18
+
+title Entity Relationship Diagram
+
+entity "auth.users" as auth_users {
+  * id : uuid <<PK>>
+  --
+  .. Supabase Auth schema ..
+}
+
+entity "managers" as managers {
+  * id : bigint <<PK, generated>>
+  --
+  * user_id : uuid <<FK>>
+  * name : varchar(128)
+  * position : varchar(64)
+  created_at : timestamptz <<default now()>>
+}
+
+entity "clients" as clients {
+  * id : bigint <<PK, generated>>
+  --
+  * chat_id : bigint <<UNIQUE>>
+  * user_id : bigint <<UNIQUE>>
+  username : varchar(32)
+  first_name : varchar(64)
+  last_name : varchar(64)
+  created_at : timestamptz <<default now()>>
+}
+
+entity "client_assignments" as client_assignments {
+  * id : bigint <<PK, generated>>
+  --
+  * client_id : bigint <<FK, UNIQUE>>
+  assigned_manager_id : bigint <<FK>>
+  assigned_by_manager_id : bigint <<FK>>
+  updated_at : timestamptz <<default now()>>
+}
+
+entity "messages" as messages {
+  * id : bigint <<PK, generated>>
+  --
+  * client_id : bigint <<FK>>
+  * text : text
+  * created_at : timestamptz <<default now()>>
+}
+
+auth_users ||--o| managers : "user_id"
+clients ||--o| client_assignments : "client_id"
+managers |o--o{ client_assignments : "assigned_manager_id"
+managers |o--o{ client_assignments : "assigned_by_manager_id"
+clients ||--o{ messages : "client_id"
+
+@enduml

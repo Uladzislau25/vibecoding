@@ -1,0 +1,35 @@
+@startuml
+
+skinparam titleFontSize 18
+skinparam sequenceArrowThickness 2
+skinparam sequenceParticipantFontSize 13
+skinparam sequenceMessageFontSize 12
+
+title Incoming Telegram Message
+
+participant "Telegram" as tg
+participant "Backend" as api
+database "clients" as db_clients
+database "messages" as db_messages
+
+tg -> api : Webhook: new message\n{ chat_id, user_id, username,\nfirst_name, last_name, text }
+
+api -> db_clients : SELECT client\nWHERE chat_id = ?
+
+alt Клиент не найден
+  api -> db_clients : INSERT (\nchat_id, user_id,\nusername, first_name, last_name\n)
+  db_clients --> api : new client (id)
+else Клиент найден
+  db_clients --> api : existing client (id)
+  opt Данные клиента изменились
+    api -> db_clients : UPDATE SET\nusername, first_name, last_name
+    db_clients --> api : OK
+  end
+end
+
+api -> db_messages : INSERT (\nclient_id, text\n)
+db_messages --> api : OK
+
+api --> tg : 200 OK
+
+@enduml
