@@ -1,12 +1,14 @@
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const { data: messages, error } = await supabase
-    .from("messages")
-    .select("id, text, created_at, client:clients!inner(id, chat_id, user_id, username, first_name, last_name)")
-    .order("created_at", { ascending: true });
+  const { data: clients, error } = await supabase
+    .from("clients")
+    .select("id, chat_id, user_id, username, first_name, last_name, messages(id, text, created_at)")
+    .order("created_at", { referencedTable: "messages", ascending: false })
+    .limit(1, { referencedTable: "messages" });
 
   if (error) {
     return (
@@ -16,89 +18,65 @@ export default async function Home() {
     );
   }
 
-  const msgs = (messages ?? []).filter((m) => m.client != null);
-  const totalMessages = msgs.length;
-  const uniqueChats = new Set(msgs.map((m) => m.client!.id)).size;
-
-  // Group by client id
-  const grouped = msgs.reduce<Record<number, typeof msgs>>((acc, msg) => {
-    const clientId = msg.client!.id;
-    if (!acc[clientId]) acc[clientId] = [];
-    acc[clientId].push(msg);
-    return acc;
-  }, {});
+  const chats = (clients ?? [])
+    .filter((c) => c.messages.length > 0)
+    .sort((a, b) => {
+      const ta = new Date(a.messages[0].created_at).getTime();
+      const tb = new Date(b.messages[0].created_at).getTime();
+      return tb - ta;
+    });
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
       <div className="max-w-3xl mx-auto px-6 py-4">
-        <div className="flex gap-6 text-sm text-gray-500">
-          <span>
-            Сообщений: <span className="font-medium text-gray-700">{totalMessages}</span>
-          </span>
-          <span>
-            Пользователей: <span className="font-medium text-gray-700">{uniqueChats}</span>
-          </span>
+        <div className="text-sm text-gray-500">
+          Чатов: <span className="font-medium text-gray-700">{chats.length}</span>
         </div>
       </div>
 
-      <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-10">
-        {Object.entries(grouped).map(([clientId, chatMessages]) => {
-          const client = chatMessages[0].client!;
+      <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-2">
+        {chats.map((client) => {
           const display =
-            client.first_name || client.username || `User ${clientId}`;
+            [client.first_name, client.last_name].filter(Boolean).join(" ") ||
+            client.username ||
+            `User ${client.chat_id ?? client.id}`;
+          const lastMsg = client.messages[0];
+          const time = new Date(lastMsg.created_at).toLocaleString("ru-RU", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
           return (
-            <section key={clientId}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                  {display[0].toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{display}</p>
-                  <p className="text-xs text-gray-400">Chat ID: {client.chat_id}</p>
-                </div>
+            <Link
+              key={client.id}
+              href={`/chat/${client.id}`}
+              className="flex items-center gap-4 bg-white rounded-2xl border border-gray-200/80 px-5 py-4 shadow-sm hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                {display[0].toUpperCase()}
               </div>
-
-              <div className="flex flex-col gap-3">
-                {chatMessages.map((msg) => {
-                  const c = msg.client!;
-                  const name = [c.first_name, c.last_name]
-                    .filter(Boolean)
-                    .join(" ") || c.username || `User ${c.chat_id ?? c.id}`;
-                  const time = new Date(msg.created_at).toLocaleString("ru-RU", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className="bg-white rounded-2xl border border-gray-200/80 px-5 py-4 shadow-sm"
-                    >
-                      <div className="flex items-baseline justify-between gap-4">
-                        <span className="text-[15px] font-semibold text-gray-900">
-                          {name}
-                        </span>
-                        <time className="text-xs text-gray-400 whitespace-nowrap">
-                          {time}
-                        </time>
-                      </div>
-                      <p className="mt-1.5 text-[15px] leading-relaxed text-gray-700">
-                        {msg.text}
-                      </p>
-                    </div>
-                  );
-                })}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {display}
+                  </p>
+                  <time className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                    {time}
+                  </time>
+                </div>
+                <p className="text-sm text-gray-500 truncate mt-0.5">
+                  {lastMsg.text}
+                </p>
               </div>
-            </section>
+            </Link>
           );
         })}
 
-        {msgs.length === 0 && (
+        {chats.length === 0 && (
           <div className="text-center py-20 text-gray-400">
-            Сообщений пока нет
+            Чатов пока нет
           </div>
         )}
       </main>

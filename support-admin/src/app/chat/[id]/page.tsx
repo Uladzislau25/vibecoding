@@ -1,0 +1,106 @@
+import { supabase } from "@/lib/supabase";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+
+export default async function ChatPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const clientId = Number(id);
+
+  const [clientRes, messagesRes] = await Promise.all([
+    supabase.from("clients").select("*").eq("id", clientId).single(),
+    supabase
+      .from("messages")
+      .select("id, text, created_at")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (clientRes.error || !clientRes.data) return notFound();
+
+  const client = clientRes.data;
+  const messages = messagesRes.data ?? [];
+  const display =
+    [client.first_name, client.last_name].filter(Boolean).join(" ") ||
+    client.username ||
+    `User ${client.chat_id ?? client.id}`;
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="max-w-3xl mx-auto px-6 py-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Назад"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </Link>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+            {display[0].toUpperCase()}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{display}</p>
+            <p className="text-xs text-gray-400">
+              {client.username ? `@${client.username}` : `Chat ID: ${client.chat_id}`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-3">
+        {messages.map((msg) => {
+          const time = new Date(msg.created_at).toLocaleString("ru-RU", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          return (
+            <div
+              key={msg.id}
+              className="bg-white rounded-2xl border border-gray-200/80 px-5 py-4 shadow-sm"
+            >
+              <div className="flex items-baseline justify-between gap-4">
+                <span className="text-[15px] font-semibold text-gray-900">
+                  {display}
+                </span>
+                <time className="text-xs text-gray-400 whitespace-nowrap">
+                  {time}
+                </time>
+              </div>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-gray-700">
+                {msg.text}
+              </p>
+            </div>
+          );
+        })}
+
+        {messages.length === 0 && (
+          <div className="text-center py-20 text-gray-400">
+            Сообщений пока нет
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
