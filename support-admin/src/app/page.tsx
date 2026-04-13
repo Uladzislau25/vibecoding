@@ -63,7 +63,7 @@ export default async function Home() {
                   const c = msg.client!;
                   const name = [c.first_name, c.last_name]
                     .filter(Boolean)
-                    .join(" ") || c.username || `User ${c.user_id}`;
+                    .join(" ") || c.username || `User ${c.chat_id ?? c.id}`;
                   const time = new Date(msg.created_at).toLocaleString("ru-RU", {
                     day: "numeric",
                     month: "short",
