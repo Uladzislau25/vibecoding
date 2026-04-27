@@ -2,11 +2,122 @@ import { createClient } from "@supabase/supabase-js";
 import { Database } from "../_shared/database.types.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+
+const DEFAULT_CHAT_SETTINGS = {
+  temperature: 0.8,
+  max_tokens: 1000,
+  system_prompt:
+    "Ты Шеф - дружелюбный кулинарный помощник. Отвечай только на кулинарные темы, давай рецепты в формате: Название, Ингредиенты, Пошаговые инструкции, Время приготовления. Учитывай сезонность и предлагай замены аллергенам. Считай калории, белки, жиры, углеводы.",
+};
 
 const supabase = createClient<Database>(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
+
+async function sendTelegramMessage(chatId: number, text: string) {
+  const res = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    },
+  );
+  const body = await res.json();
+  if (!body.ok) console.error("Telegram sendMessage error:", body);
+}
+
+async function sendTypingAction(chatId: number) {
+  const res = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendChatAction`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    },
+  );
+  const body = await res.json();
+  if (!body.ok) console.error("Telegram sendChatAction error:", body);
+}
+
+async function createEmbedding(text: string): Promise<number[]> {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "text-embedding-3-small",
+      input: text,
+      dimensions: 1536,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`OpenAI embeddings error: ${res.status} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.data[0].embedding;
+}
+
+type GeneratedRecipe = {
+  title: string;
+  ingredients: string;
+  instructions: string;
+  reply_text: string;
+};
+
+const JSON_SCHEMA_INSTRUCTION = `
+Верни ответ строго в формате JSON со следующими полями:
+{
+  "title": "краткое название рецепта (до 256 символов)",
+  "ingredients": "список ингредиентов с количествами, по одному на строку",
+  "instructions": "пошаговые инструкции приготовления",
+  "reply_text": "полный готовый ответ пользователю в свободной форме (название, ингредиенты, шаги, время, КБЖУ — всё, что обычно)"
+}
+Никакого текста вне JSON. Только валидный JSON.`;
+
+async function generateRecipeWithDeepSeek(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  temperature: number,
+  maxTokens: number,
+): Promise<GeneratedRecipe> {
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt + "\n\n" + JSON_SCHEMA_INSTRUCTION },
+        { role: "user", content: userMessage },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`DeepSeek error: ${res.status} ${await res.text()}`);
+  }
+  const body = await res.json();
+  const content = body.choices[0].message.content;
+  const parsed = JSON.parse(content) as Partial<GeneratedRecipe>;
+
+  return {
+    title: (parsed.title ?? "Рецепт").slice(0, 256),
+    ingredients: parsed.ingredients ?? "",
+    instructions: parsed.instructions ?? "",
+    reply_text: parsed.reply_text ?? content,
+  };
+}
 
 Deno.serve(async (req) => {
   try {
@@ -25,29 +136,14 @@ Deno.serve(async (req) => {
       `Message from ${message.from?.first_name} (${message.from?.id}): ${message.text}`,
     );
 
-
     if (message.text.trim() === "/start") {
-      const res = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: message.chat.id,
-            text: "Здравствуйте! Опишите вашу проблему, и мы поможем.",
-          }),
-        },
+      await sendTelegramMessage(
+        message.chat.id,
+        "Здравствуйте! Опишите вашу проблему, и мы поможем.",
       );
-
-      const resBody = await res.json();
-      if (!resBody.ok) {
-        console.error("Telegram API error:", resBody);
-      }
-
       return new Response("OK", { status: 200 });
     }
 
-    // Upsert client by chat_id
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .upsert(
@@ -63,38 +159,84 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
 
-    if (clientError) {
+    if (clientError || !client) {
       console.error("Failed to upsert client:", clientError);
       return new Response("OK", { status: 200 });
     }
 
-    const { error: dbError } = await supabase.from("messages").insert({
-      client_id: client.id,
-      text: message.text,
-    });
+    const { data: settingsRow } = await supabase
+      .from("chat_settings")
+      .select("temperature, max_tokens, system_prompt")
+      .eq("client_id", client.id)
+      .maybeSingle();
 
-    if (dbError) {
+    const settings = {
+      temperature: settingsRow?.temperature ?? DEFAULT_CHAT_SETTINGS.temperature,
+      max_tokens: settingsRow?.max_tokens ?? DEFAULT_CHAT_SETTINGS.max_tokens,
+      system_prompt: settingsRow?.system_prompt ??
+        DEFAULT_CHAT_SETTINGS.system_prompt,
+    };
+
+    const { data: savedMessage, error: dbError } = await supabase
+      .from("messages")
+      .insert({
+        client_id: client.id,
+        text: message.text,
+      })
+      .select("id, ai_model")
+      .single();
+
+    if (dbError || !savedMessage) {
       console.error("Failed to save message:", dbError);
+      return new Response("OK", { status: 200 });
     }
 
-    const reply = `I got your message: "${message.text}" Hello`;
+    const aiModel = savedMessage.ai_model ?? "deepseek-chat";
 
-    const res = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: message.chat.id,
-          text: reply,
-        }),
-      },
+    await sendTypingAction(message.chat.id);
+
+    const embedding = await createEmbedding(message.text);
+    const embeddingLiteral = JSON.stringify(embedding);
+
+    const { data: matches, error: searchError } = await supabase.rpc(
+      "search_recipes",
+      { query_embedding: embeddingLiteral, match_count: 1 },
     );
 
-    const resBody = await res.json();
-    if (!resBody.ok) {
-      console.error("Telegram API error:", resBody);
+    if (searchError) {
+      console.error("search_recipes error:", searchError);
     }
+
+    let reply: string;
+
+    if (matches && matches.length > 0) {
+      const recipe = matches[0];
+      reply = `${recipe.title}\n\n${recipe.description}`;
+    } else {
+      const generated = await generateRecipeWithDeepSeek(
+        aiModel,
+        settings.system_prompt,
+        message.text,
+        settings.temperature,
+        settings.max_tokens,
+      );
+
+      const { error: insertError } = await supabase.from("recipes").insert({
+        title: generated.title,
+        description: generated.reply_text,
+        ingredients: generated.ingredients,
+        instructions: generated.instructions,
+        embedding: embeddingLiteral,
+      });
+
+      if (insertError) {
+        console.error("Failed to save recipe:", insertError);
+      }
+
+      reply = generated.reply_text;
+    }
+
+    await sendTelegramMessage(message.chat.id, reply);
 
     return new Response("OK", { status: 200 });
   } catch (err) {
