@@ -12,8 +12,62 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
+      chat_settings: {
+        Row: {
+          client_id: number
+          max_tokens: number | null
+          system_prompt: string | null
+          temperature: number | null
+        }
+        Insert: {
+          client_id: number
+          max_tokens?: number | null
+          system_prompt?: string | null
+          temperature?: number | null
+        }
+        Update: {
+          client_id?: number
+          max_tokens?: number | null
+          system_prompt?: string | null
+          temperature?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_settings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_assignments: {
         Row: {
           assigned_by_manager_id: number | null
@@ -116,21 +170,33 @@ export type Database = {
       }
       messages: {
         Row: {
+          ai_model: string | null
           client_id: number
           created_at: string
           id: number
+          manager_id: number | null
+          sender_type: string
+          status: string | null
           text: string
         }
         Insert: {
+          ai_model?: string | null
           client_id: number
           created_at?: string
           id?: never
+          manager_id?: number | null
+          sender_type?: string
+          status?: string | null
           text: string
         }
         Update: {
+          ai_model?: string | null
           client_id?: number
           created_at?: string
           id?: never
+          manager_id?: number | null
+          sender_type?: string
+          status?: string | null
           text?: string
         }
         Relationships: [
@@ -141,14 +207,100 @@ export type Database = {
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "managers"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      messages_managers: {
+        Row: {
+          action: string | null
+          client_id: number | null
+          created_at: string | null
+          id: string
+          manager_id: number | null
+        }
+        Insert: {
+          action?: string | null
+          client_id?: number | null
+          created_at?: string | null
+          id?: string
+          manager_id?: number | null
+        }
+        Update: {
+          action?: string | null
+          client_id?: number | null
+          created_at?: string | null
+          id?: string
+          manager_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_managers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_managers_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          created_at: string
+          description: string | null
+          embedding: string | null
+          id: number
+          ingredients: string
+          instructions: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          id?: never
+          ingredients: string
+          instructions: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          id?: never
+          ingredients?: string
+          instructions?: string
+          title?: string
+        }
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_recipes: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          description: string
+          id: number
+          ingredients: string
+          instructions: string
+          similarity: number
+          title: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -277,6 +429,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
