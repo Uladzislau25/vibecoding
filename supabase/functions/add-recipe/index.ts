@@ -52,29 +52,60 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => null);
-    const query = typeof body?.query === "string" ? body.query.trim() : "";
-    const recipeText = typeof body?.recipe_text === "string"
-      ? body.recipe_text.trim()
+    const id = typeof body?.id === "number" ? body.id : null;
+    const title = typeof body?.title === "string" ? body.title.trim() : "";
+    const description = typeof body?.description === "string"
+      ? body.description.trim()
+      : "";
+    const ingredients = typeof body?.ingredients === "string"
+      ? body.ingredients.trim()
+      : "";
+    const instructions = typeof body?.instructions === "string"
+      ? body.instructions.trim()
       : "";
 
-    if (!query || !recipeText) {
+    if (!title || !ingredients || !instructions) {
       return jsonResponse(
-        { error: "query and recipe_text are required" },
+        { error: "title, ingredients and instructions are required" },
         400,
       );
     }
 
-    const embedding = await createEmbedding(`${query}\n\n${recipeText}`);
+    const embeddingInput = [title, description, ingredients, instructions]
+      .filter(Boolean)
+      .join("\n\n");
+    const embedding = await createEmbedding(embeddingInput);
+
+    const payload = {
+      title: title.slice(0, 256),
+      description: description || null,
+      ingredients,
+      instructions,
+      embedding: JSON.stringify(embedding),
+    };
+
+    if (id !== null) {
+      const { data: updated, error: updateError } = await admin
+        .from("recipes")
+        .update(payload)
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) {
+        console.error("Failed to update recipe:", updateError);
+        return jsonResponse({ error: "Failed to update recipe" }, 500);
+      }
+      if (!updated) {
+        return jsonResponse({ error: "Recipe not found" }, 404);
+      }
+
+      return jsonResponse({ success: true, id: updated.id });
+    }
 
     const { data: inserted, error: insertError } = await admin
       .from("recipes")
-      .insert({
-        title: query.slice(0, 256),
-        description: recipeText,
-        ingredients: "",
-        instructions: "",
-        embedding: JSON.stringify(embedding),
-      })
+      .insert(payload)
       .select("id")
       .single();
 
