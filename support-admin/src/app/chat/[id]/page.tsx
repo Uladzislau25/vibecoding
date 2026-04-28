@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ChatSettingsPanel from "@/app/components/chat-settings-panel";
+import MessagesList from "./messages-list";
 import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -98,40 +99,11 @@ export default async function ChatPage({
           initialStatus={initialStatus}
         />
 
-        {messages.map((msg) => {
-          const time = new Date(msg.created_at).toLocaleString("ru-RU", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          return (
-            <div
-              key={msg.id}
-              className="bg-white rounded-2xl border border-gray-200/80 px-5 py-4 shadow-sm"
-            >
-              <div className="flex items-baseline justify-between gap-4">
-                <span className="text-[15px] font-semibold text-gray-900">
-                  {display}
-                </span>
-                <time className="text-xs text-gray-400 whitespace-nowrap">
-                  {time}
-                </time>
-              </div>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-gray-700">
-                {msg.text}
-              </p>
-            </div>
-          );
-        })}
-
-        {messages.length === 0 && (
-          <div className="text-center py-20 text-gray-400">
-            Сообщений пока нет
-          </div>
-        )}
+        <MessagesList
+          clientId={clientId}
+          displayName={display}
+          initialMessages={messages}
+        />
       </main>
     </div>
   );
