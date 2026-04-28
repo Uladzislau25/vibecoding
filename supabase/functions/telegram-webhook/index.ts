@@ -193,45 +193,50 @@ Deno.serve(async (req) => {
 
     await sendTypingAction(message.chat.id);
 
-    const embedding = await createEmbedding(message.text);
-    const embeddingLiteral = JSON.stringify(embedding);
-
-    const { data: matches, error: searchError } = await supabase.rpc(
-      "search_recipes",
-      { query_embedding: embeddingLiteral, match_count: 1 },
-    );
-
-    if (searchError) {
-      console.error("search_recipes error:", searchError);
-    }
-
     let reply: string;
+    try {
+      const embedding = await createEmbedding(message.text);
+      const embeddingLiteral = JSON.stringify(embedding);
 
-    if (matches && matches.length > 0) {
-      const recipe = matches[0];
-      reply = `${recipe.title}\n\n${recipe.description}`;
-    } else {
-      const generated = await generateRecipeWithDeepSeek(
-        settings.model,
-        settings.system_prompt,
-        message.text,
-        settings.temperature,
-        settings.max_tokens,
+      const { data: matches, error: searchError } = await supabase.rpc(
+        "search_recipes",
+        { query_embedding: embeddingLiteral, match_count: 1 },
       );
 
-      const { error: insertError } = await supabase.from("recipes").insert({
-        title: generated.title,
-        description: generated.reply_text,
-        ingredients: generated.ingredients,
-        instructions: generated.instructions,
-        embedding: embeddingLiteral,
-      });
-
-      if (insertError) {
-        console.error("Failed to save recipe:", insertError);
+      if (searchError) {
+        console.error("search_recipes error:", searchError);
       }
 
-      reply = generated.reply_text;
+      if (matches && matches.length > 0) {
+        const recipe = matches[0];
+        reply = `${recipe.title}\n\n${recipe.description}`;
+      } else {
+        const generated = await generateRecipeWithDeepSeek(
+          settings.model,
+          settings.system_prompt,
+          message.text,
+          settings.temperature,
+          settings.max_tokens,
+        );
+
+        const { error: insertError } = await supabase.from("recipes").insert({
+          title: generated.title,
+          description: generated.reply_text,
+          ingredients: generated.ingredients,
+          instructions: generated.instructions,
+          embedding: embeddingLiteral,
+        });
+
+        if (insertError) {
+          console.error("Failed to save recipe:", insertError);
+        }
+
+        reply = generated.reply_text;
+      }
+    } catch (err) {
+      console.error("Failed to build reply:", err);
+      reply =
+        "Извините, сейчас не получается подобрать рецепт. Попробуйте, пожалуйста, чуть позже.";
     }
 
     await sendTelegramMessage(message.chat.id, reply);
