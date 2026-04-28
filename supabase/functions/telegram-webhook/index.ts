@@ -6,6 +6,7 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 
 const DEFAULT_CHAT_SETTINGS = {
+  model: "deepseek-chat",
   temperature: 0.8,
   max_tokens: 1000,
   system_prompt:
@@ -166,32 +167,29 @@ Deno.serve(async (req) => {
 
     const { data: settingsRow } = await supabase
       .from("chat_settings")
-      .select("temperature, max_tokens, system_prompt")
+      .select("model, temperature, max_tokens, system_prompt")
       .eq("client_id", client.id)
       .maybeSingle();
 
     const settings = {
+      model: settingsRow?.model ?? DEFAULT_CHAT_SETTINGS.model,
       temperature: settingsRow?.temperature ?? DEFAULT_CHAT_SETTINGS.temperature,
       max_tokens: settingsRow?.max_tokens ?? DEFAULT_CHAT_SETTINGS.max_tokens,
       system_prompt: settingsRow?.system_prompt ??
         DEFAULT_CHAT_SETTINGS.system_prompt,
     };
 
-    const { data: savedMessage, error: dbError } = await supabase
+    const { error: dbError } = await supabase
       .from("messages")
       .insert({
         client_id: client.id,
         text: message.text,
-      })
-      .select("id, ai_model")
-      .single();
+      });
 
-    if (dbError || !savedMessage) {
+    if (dbError) {
       console.error("Failed to save message:", dbError);
       return new Response("OK", { status: 200 });
     }
-
-    const aiModel = savedMessage.ai_model ?? "deepseek-chat";
 
     await sendTypingAction(message.chat.id);
 
@@ -214,7 +212,7 @@ Deno.serve(async (req) => {
       reply = `${recipe.title}\n\n${recipe.description}`;
     } else {
       const generated = await generateRecipeWithDeepSeek(
-        aiModel,
+        settings.model,
         settings.system_prompt,
         message.text,
         settings.temperature,

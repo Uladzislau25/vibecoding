@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_settings: {
+        Row: {
+          client_id: number
+          max_tokens: number | null
+          model: string
+          system_prompt: string | null
+          temperature: number | null
+        }
+        Insert: {
+          client_id: number
+          max_tokens?: number | null
+          model?: string
+          system_prompt?: string | null
+          temperature?: number | null
+        }
+        Update: {
+          client_id?: number
+          max_tokens?: number | null
+          model?: string
+          system_prompt?: string | null
+          temperature?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_settings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_assignments: {
         Row: {
           assigned_by_manager_id: number | null
@@ -67,6 +99,7 @@ export type Database = {
           first_name: string | null
           id: number
           last_name: string | null
+          status: string
           user_id: number
           username: string | null
         }
@@ -76,6 +109,7 @@ export type Database = {
           first_name?: string | null
           id?: never
           last_name?: string | null
+          status?: string
           user_id: number
           username?: string | null
         }
@@ -85,6 +119,7 @@ export type Database = {
           first_name?: string | null
           id?: never
           last_name?: string | null
+          status?: string
           user_id?: number
           username?: string | null
         }
@@ -111,6 +146,75 @@ export type Database = {
           name?: string
           position?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      messages_managers: {
+        Row: {
+          action: string | null
+          client_id: number | null
+          created_at: string | null
+          id: string
+          manager_id: number | null
+        }
+        Insert: {
+          action?: string | null
+          client_id?: number | null
+          created_at?: string | null
+          id?: string
+          manager_id?: number | null
+        }
+        Update: {
+          action?: string | null
+          client_id?: number | null
+          created_at?: string | null
+          id?: string
+          manager_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_managers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_managers_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          created_at: string
+          description: string | null
+          embedding: string | null
+          id: number
+          ingredients: string
+          instructions: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          id?: never
+          ingredients: string
+          instructions: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          embedding?: string | null
+          id?: never
+          ingredients?: string
+          instructions?: string
+          title?: string
         }
         Relationships: []
       }

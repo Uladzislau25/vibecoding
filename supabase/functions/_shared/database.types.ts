@@ -43,18 +43,21 @@ export type Database = {
         Row: {
           client_id: number
           max_tokens: number | null
+          model: string
           system_prompt: string | null
           temperature: number | null
         }
         Insert: {
           client_id: number
           max_tokens?: number | null
+          model?: string
           system_prompt?: string | null
           temperature?: number | null
         }
         Update: {
           client_id?: number
           max_tokens?: number | null
+          model?: string
           system_prompt?: string | null
           temperature?: number | null
         }
@@ -121,6 +124,7 @@ export type Database = {
           first_name: string | null
           id: number
           last_name: string | null
+          status: string
           user_id: number
           username: string | null
         }
@@ -130,6 +134,7 @@ export type Database = {
           first_name?: string | null
           id?: never
           last_name?: string | null
+          status?: string
           user_id: number
           username?: string | null
         }
@@ -139,6 +144,7 @@ export type Database = {
           first_name?: string | null
           id?: never
           last_name?: string | null
+          status?: string
           user_id?: number
           username?: string | null
         }
@@ -170,33 +176,27 @@ export type Database = {
       }
       messages: {
         Row: {
-          ai_model: string | null
           client_id: number
           created_at: string
           id: number
           manager_id: number | null
           sender_type: string
-          status: string | null
           text: string
         }
         Insert: {
-          ai_model?: string | null
           client_id: number
           created_at?: string
           id?: never
           manager_id?: number | null
           sender_type?: string
-          status?: string | null
           text: string
         }
         Update: {
-          ai_model?: string | null
           client_id?: number
           created_at?: string
           id?: never
           manager_id?: number | null
           sender_type?: string
-          status?: string | null
           text?: string
         }
         Relationships: [
