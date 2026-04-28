@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { Database } from "../_shared/database.types.ts";
+import { createEmbedding } from "../_shared/embeddings.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,26 +20,6 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const admin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-async function createEmbedding(text: string): Promise<number[]> {
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: text,
-      dimensions: 1536,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`OpenAI embeddings error: ${res.status} ${await res.text()}`);
-  }
-  const body = await res.json();
-  return body.data[0].embedding;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -74,7 +54,7 @@ Deno.serve(async (req) => {
     const embeddingInput = [title, description, ingredients, instructions]
       .filter(Boolean)
       .join("\n\n");
-    const embedding = await createEmbedding(embeddingInput);
+    const embedding = await createEmbedding(embeddingInput, "passage");
 
     const payload = {
       title: title.slice(0, 256),

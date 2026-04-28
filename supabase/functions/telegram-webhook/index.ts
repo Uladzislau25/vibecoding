@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { Database } from "../_shared/database.types.ts";
+import { createEmbedding } from "../_shared/embeddings.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 
 const DEFAULT_CHAT_SETTINGS = {
   model: "deepseek-chat",
@@ -42,26 +42,6 @@ async function sendTypingAction(chatId: number) {
   );
   const body = await res.json();
   if (!body.ok) console.error("Telegram sendChatAction error:", body);
-}
-
-async function createEmbedding(text: string): Promise<number[]> {
-  const res = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "text-embedding-3-small",
-      input: text,
-      dimensions: 1536,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`OpenAI embeddings error: ${res.status} ${await res.text()}`);
-  }
-  const body = await res.json();
-  return body.data[0].embedding;
 }
 
 type GeneratedRecipe = {
@@ -195,12 +175,12 @@ Deno.serve(async (req) => {
 
     let reply: string;
     try {
-      const embedding = await createEmbedding(message.text);
-      const embeddingLiteral = JSON.stringify(embedding);
+      const queryEmbedding = await createEmbedding(message.text, "query");
+      const queryEmbeddingLiteral = JSON.stringify(queryEmbedding);
 
       const { data: matches, error: searchError } = await supabase.rpc(
         "search_recipes",
-        { query_embedding: embeddingLiteral, match_count: 1 },
+        { query_embedding: queryEmbeddingLiteral, match_count: 1 },
       );
 
       if (searchError) {
@@ -219,12 +199,20 @@ Deno.serve(async (req) => {
           settings.max_tokens,
         );
 
+        const passageInput = [
+          generated.title,
+          generated.reply_text,
+          generated.ingredients,
+          generated.instructions,
+        ].filter(Boolean).join("\n\n");
+        const passageEmbedding = await createEmbedding(passageInput, "passage");
+
         const { error: insertError } = await supabase.from("recipes").insert({
           title: generated.title,
           description: generated.reply_text,
           ingredients: generated.ingredients,
           instructions: generated.instructions,
-          embedding: embeddingLiteral,
+          embedding: JSON.stringify(passageEmbedding),
         });
 
         if (insertError) {

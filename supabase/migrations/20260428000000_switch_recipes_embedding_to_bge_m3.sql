@@ -1,14 +1,8 @@
-create extension if not exists vector;
+drop index if exists recipes_embedding_idx;
+drop function if exists search_recipes(vector, int);
 
-create table recipes (
-  id bigint generated always as identity primary key,
-  title varchar(256) not null,
-  description text,
-  ingredients text not null,
-  instructions text not null,
-  embedding vector(1024),
-  created_at timestamptz not null default now()
-);
+alter table recipes drop column if exists embedding;
+alter table recipes add column embedding vector(1024);
 
 create index recipes_embedding_idx on recipes
   using ivfflat (embedding vector_cosine_ops)
