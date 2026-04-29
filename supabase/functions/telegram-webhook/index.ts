@@ -120,7 +120,10 @@ Deno.serve(async (req) => {
     if (message.text.trim() === "/start") {
       await sendTelegramMessage(
         message.chat.id,
-        "Здравствуйте! Опишите вашу проблему, и мы поможем.",
+        "Привет! Я Шеф — ваш кулинарный помощник 👨‍🍳\n\n" +
+          "Расскажите, что хотите приготовить, или просто назовите блюдо — пришлю рецепт с ингредиентами, пошаговыми инструкциями, временем готовки и КБЖУ.\n\n" +
+          "Учитываю сезонность и подскажу замены, если есть аллергии или непереносимость.\n\n" +
+          "Например: «борщ», «что приготовить из курицы и риса», «лёгкий ужин на двоих».",
       );
       return new Response("OK", { status: 200 });
     }
@@ -199,27 +202,41 @@ Deno.serve(async (req) => {
           settings.max_tokens,
         );
 
-        const passageInput = [
-          generated.title,
-          generated.reply_text,
-          generated.ingredients,
-          generated.instructions,
-        ].filter(Boolean).join("\n\n");
-        const passageEmbedding = await createEmbedding(passageInput, "passage");
+        const { data: existing } = await supabase
+          .from("recipes")
+          .select("description, title")
+          .ilike("title", generated.title.trim())
+          .limit(1)
+          .maybeSingle();
 
-        const { error: insertError } = await supabase.from("recipes").insert({
-          title: generated.title,
-          description: generated.reply_text,
-          ingredients: generated.ingredients,
-          instructions: generated.instructions,
-          embedding: JSON.stringify(passageEmbedding),
-        });
+        if (existing) {
+          reply = existing.description ?? generated.reply_text;
+        } else {
+          const passageInput = [
+            generated.title,
+            generated.reply_text,
+            generated.ingredients,
+            generated.instructions,
+          ].filter(Boolean).join("\n\n");
+          const passageEmbedding = await createEmbedding(
+            passageInput,
+            "passage",
+          );
 
-        if (insertError) {
-          console.error("Failed to save recipe:", insertError);
+          const { error: insertError } = await supabase.from("recipes").insert({
+            title: generated.title,
+            description: generated.reply_text,
+            ingredients: generated.ingredients,
+            instructions: generated.instructions,
+            embedding: JSON.stringify(passageEmbedding),
+          });
+
+          if (insertError) {
+            console.error("Failed to save recipe:", insertError);
+          }
+
+          reply = generated.reply_text;
         }
-
-        reply = generated.reply_text;
       }
     } catch (err) {
       console.error("Failed to build reply:", err);

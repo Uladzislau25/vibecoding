@@ -1,7 +1,7 @@
 const HF_API_KEY = Deno.env.get("HF_API_KEY")!;
 
 const BGE_M3_ENDPOINT =
-  "https://api-inference.huggingface.co/models/BAAI/bge-m3";
+  "https://router.huggingface.co/hf-inference/models/BAAI/bge-m3/pipeline/feature-extraction";
 
 const EMBEDDING_DIM = 1024;
 
@@ -24,20 +24,20 @@ function flattenEmbedding(payload: unknown): number[] {
   throw new Error("Unexpected embedding response shape from BGE-M3");
 }
 
-export async function createEmbedding(
-  text: string,
-  kind: EmbeddingKind,
-): Promise<number[]> {
+const MAX_ATTEMPTS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchEmbeddingOnce(input: string): Promise<number[]> {
   const res = await fetch(BGE_M3_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${HF_API_KEY}`,
     },
-    body: JSON.stringify({
-      inputs: applyPrefix(text, kind),
-      options: { wait_for_model: true },
-    }),
+    body: JSON.stringify({ inputs: input }),
   });
 
   if (!res.ok) {
@@ -56,4 +56,26 @@ export async function createEmbedding(
   }
 
   return embedding;
+}
+
+export async function createEmbedding(
+  text: string,
+  kind: EmbeddingKind,
+): Promise<number[]> {
+  const input = applyPrefix(text, kind);
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fetchEmbeddingOnce(input);
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(500 * attempt);
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`BGE-M3 embeddings failed after ${MAX_ATTEMPTS} attempts`);
 }
