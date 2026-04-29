@@ -83,6 +83,19 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Client not found" }, 404);
     }
 
+    const { data: assignment } = await admin
+      .from("client_assignments")
+      .select("assigned_manager_id")
+      .eq("client_id", client.id)
+      .maybeSingle();
+
+    if (assignment?.assigned_manager_id !== managerId) {
+      return jsonResponse(
+        { error: "Manager is not assigned to this client" },
+        403,
+      );
+    }
+
     const { error: insertError } = await admin.from("messages").insert({
       client_id: client.id,
       text: messageText,

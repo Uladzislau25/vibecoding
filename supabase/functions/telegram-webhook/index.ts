@@ -246,6 +246,15 @@ Deno.serve(async (req) => {
 
     await sendTelegramMessage(message.chat.id, reply);
 
+    const { error: botInsertError } = await supabase.from("messages").insert({
+      client_id: client.id,
+      text: reply,
+      sender_type: "bot",
+    });
+    if (botInsertError) {
+      console.error("Failed to save bot reply:", botInsertError);
+    }
+
     return new Response("OK", { status: 200 });
   } catch (err) {
     console.error("Error processing webhook:", err);

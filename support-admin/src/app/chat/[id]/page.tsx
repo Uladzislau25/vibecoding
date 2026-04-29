@@ -1,8 +1,10 @@
 import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabase-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ChatSettingsPanel from "@/app/components/chat-settings-panel";
 import MessagesList from "./messages-list";
+import ReplyForm from "./reply-form";
 import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -23,24 +25,67 @@ export default async function ChatPage({
   const { id } = await params;
   const clientId = Number(id);
 
-  const [clientRes, messagesRes, settingsRes] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", clientId).single(),
-    supabase
-      .from("messages")
-      .select("id, text, created_at")
-      .eq("client_id", clientId)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("chat_settings")
-      .select("model, temperature, max_tokens, system_prompt")
-      .eq("client_id", clientId)
-      .maybeSingle(),
-  ]);
+  const [clientRes, messagesRes, settingsRes, assignmentRes] =
+    await Promise.all([
+      supabase.from("clients").select("*").eq("id", clientId).single(),
+      supabase
+        .from("messages")
+        .select("id, text, created_at, sender_type, manager_id")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("chat_settings")
+        .select("model, temperature, max_tokens, system_prompt")
+        .eq("client_id", clientId)
+        .maybeSingle(),
+      supabase
+        .from("client_assignments")
+        .select("assigned_manager_id")
+        .eq("client_id", clientId)
+        .maybeSingle(),
+    ]);
 
   if (clientRes.error || !clientRes.data) return notFound();
 
   const client = clientRes.data;
-  const messages = messagesRes.data ?? [];
+  const messages = (messagesRes.data ?? []).map((m) => ({
+    id: m.id,
+    text: m.text,
+    created_at: m.created_at,
+    sender_type: (m.sender_type as "client" | "manager" | "bot") ?? "client",
+    manager_id: m.manager_id,
+  }));
+
+  const managerIds = Array.from(
+    new Set(messages.map((m) => m.manager_id).filter((v): v is number => !!v)),
+  );
+  const { data: managersRows } = managerIds.length
+    ? await supabase.from("managers").select("id, name").in("id", managerIds)
+    : { data: [] as { id: number; name: string }[] };
+  const managerNames: Record<number, string> = Object.fromEntries(
+    (managersRows ?? []).map((m) => [m.id, m.name]),
+  );
+
+  const supabaseSrv = await createSupabaseServer();
+  const {
+    data: { user },
+  } = await supabaseSrv.auth.getUser();
+  const { data: currentManager } = user
+    ? await supabaseSrv
+        .from("managers")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const assignedManagerId = assignmentRes.data?.assigned_manager_id ?? null;
+  const isAssigned =
+    !!currentManager && currentManager.id === assignedManagerId;
+
+  if (currentManager && !managerNames[currentManager.id]) {
+    managerNames[currentManager.id] = currentManager.name;
+  }
+
   const settingsRow = settingsRes.data;
   const initialSettings: ChatSettingsInput = {
     model:
@@ -99,9 +144,20 @@ export default async function ChatPage({
           initialStatus={initialStatus}
         />
 
+        {isAssigned && currentManager ? (
+          <ReplyForm clientId={clientId} managerId={currentManager.id} />
+        ) : (
+          <div className="text-center text-xs text-gray-400 py-3">
+            {assignedManagerId
+              ? "Ответить может только назначенный менеджер"
+              : "Назначьте менеджера, чтобы ответить клиенту"}
+          </div>
+        )}
+
         <MessagesList
           clientId={clientId}
-          displayName={display}
+          clientName={display}
+          managerNames={managerNames}
           initialMessages={messages}
         />
       </main>

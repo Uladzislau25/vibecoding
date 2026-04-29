@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       chat_settings: {
@@ -149,6 +174,48 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          client_id: number
+          created_at: string
+          id: number
+          manager_id: number | null
+          sender_type: string
+          text: string
+        }
+        Insert: {
+          client_id: number
+          created_at?: string
+          id?: never
+          manager_id?: number | null
+          sender_type?: string
+          text: string
+        }
+        Update: {
+          client_id?: number
+          created_at?: string
+          id?: never
+          manager_id?: number | null
+          sender_type?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages_managers: {
         Row: {
           action: string | null
@@ -218,41 +285,22 @@ export type Database = {
         }
         Relationships: []
       }
-      messages: {
-        Row: {
-          client_id: number
-          created_at: string
-          id: number
-          text: string
-        }
-        Insert: {
-          client_id: number
-          created_at?: string
-          id?: never
-          text: string
-        }
-        Update: {
-          client_id?: number
-          created_at?: string
-          id?: never
-          text?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_recipes: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          description: string
+          id: number
+          ingredients: string
+          instructions: string
+          similarity: number
+          title: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -381,6 +429,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
