@@ -30,7 +30,9 @@ export default async function ChatPage({
       supabase.from("clients").select("*").eq("id", clientId).single(),
       supabase
         .from("messages")
-        .select("id, text, created_at, sender_type, manager_id")
+        .select(
+          "id, text, created_at, sender_type, manager_id, total_tokens",
+        )
         .eq("client_id", clientId)
         .order("created_at", { ascending: false }),
       supabase
@@ -54,7 +56,13 @@ export default async function ChatPage({
     created_at: m.created_at,
     sender_type: (m.sender_type as "client" | "manager" | "bot") ?? "client",
     manager_id: m.manager_id,
+    total_tokens: m.total_tokens,
   }));
+
+  const totalTokens = messages.reduce(
+    (sum, m) => sum + (m.total_tokens ?? 0),
+    0,
+  );
 
   const managerIds = Array.from(
     new Set(messages.map((m) => m.manager_id).filter((v): v is number => !!v)),
@@ -128,10 +136,18 @@ export default async function ChatPage({
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
             {display[0].toUpperCase()}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">{display}</p>
             <p className="text-xs text-gray-400">
               {client.username ? `@${client.username}` : `Chat ID: ${client.chat_id}`}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400">
+              Токены
+            </p>
+            <p className="text-sm font-semibold text-gray-700 tabular-nums">
+              {totalTokens.toLocaleString("ru-RU")}
             </p>
           </div>
         </div>

@@ -44,11 +44,18 @@ async function sendTypingAction(chatId: number) {
   if (!body.ok) console.error("Telegram sendChatAction error:", body);
 }
 
+type TokenUsage = {
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+};
+
 type GeneratedRecipe = {
   title: string;
   ingredients: string;
   instructions: string;
   reply_text: string;
+  usage: TokenUsage;
 };
 
 const JSON_SCHEMA_INSTRUCTION = `
@@ -92,11 +99,20 @@ async function generateRecipeWithDeepSeek(
   const content = body.choices[0].message.content;
   const parsed = JSON.parse(content) as Partial<GeneratedRecipe>;
 
+  const u = body.usage ?? {};
+  const usage: TokenUsage = {
+    prompt_tokens: typeof u.prompt_tokens === "number" ? u.prompt_tokens : null,
+    completion_tokens:
+      typeof u.completion_tokens === "number" ? u.completion_tokens : null,
+    total_tokens: typeof u.total_tokens === "number" ? u.total_tokens : null,
+  };
+
   return {
     title: (parsed.title ?? "Рецепт").slice(0, 256),
     ingredients: parsed.ingredients ?? "",
     instructions: parsed.instructions ?? "",
     reply_text: parsed.reply_text ?? content,
+    usage,
   };
 }
 
@@ -177,6 +193,11 @@ Deno.serve(async (req) => {
     await sendTypingAction(message.chat.id);
 
     let reply: string;
+    let usage: TokenUsage = {
+      prompt_tokens: null,
+      completion_tokens: null,
+      total_tokens: null,
+    };
     try {
       const queryEmbedding = await createEmbedding(message.text, "query");
       const queryEmbeddingLiteral = JSON.stringify(queryEmbedding);
@@ -201,6 +222,7 @@ Deno.serve(async (req) => {
           settings.temperature,
           settings.max_tokens,
         );
+        usage = generated.usage;
 
         const { data: existing } = await supabase
           .from("recipes")
@@ -250,6 +272,9 @@ Deno.serve(async (req) => {
       client_id: client.id,
       text: reply,
       sender_type: "bot",
+      prompt_tokens: usage.prompt_tokens,
+      completion_tokens: usage.completion_tokens,
+      total_tokens: usage.total_tokens,
     });
     if (botInsertError) {
       console.error("Failed to save bot reply:", botInsertError);

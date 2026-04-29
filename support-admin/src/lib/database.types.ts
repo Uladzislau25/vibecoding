@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       chat_settings: {
@@ -177,27 +152,36 @@ export type Database = {
       messages: {
         Row: {
           client_id: number
+          completion_tokens: number | null
           created_at: string
           id: number
           manager_id: number | null
+          prompt_tokens: number | null
           sender_type: string
           text: string
+          total_tokens: number | null
         }
         Insert: {
           client_id: number
+          completion_tokens?: number | null
           created_at?: string
           id?: never
           manager_id?: number | null
+          prompt_tokens?: number | null
           sender_type?: string
           text: string
+          total_tokens?: number | null
         }
         Update: {
           client_id?: number
+          completion_tokens?: number | null
           created_at?: string
           id?: never
           manager_id?: number | null
+          prompt_tokens?: number | null
           sender_type?: string
           text?: string
+          total_tokens?: number | null
         }
         Relationships: [
           {
@@ -429,9 +413,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

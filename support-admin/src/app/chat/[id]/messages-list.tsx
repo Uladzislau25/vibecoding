@@ -11,6 +11,7 @@ export type ChatMessage = {
   created_at: string;
   sender_type: SenderType;
   manager_id: number | null;
+  total_tokens: number | null;
 };
 
 type Props = {
@@ -51,6 +52,7 @@ export default function MessagesList({
             created_at: string;
             sender_type: SenderType;
             manager_id: number | null;
+            total_tokens: number | null;
           };
           setMessages((prev) =>
             prev.some((m) => m.id === r.id)
@@ -62,6 +64,7 @@ export default function MessagesList({
                     created_at: r.created_at,
                     sender_type: r.sender_type ?? "client",
                     manager_id: r.manager_id,
+                    total_tokens: r.total_tokens ?? null,
                   },
                   ...prev,
                 ],
@@ -130,6 +133,11 @@ export default function MessagesList({
               <p className="mt-1 text-[14px] leading-relaxed text-gray-800 whitespace-pre-wrap">
                 {msg.text}
               </p>
+              {isBot && msg.total_tokens != null && (
+                <p className="mt-1.5 text-[10px] text-purple-500/80 tabular-nums">
+                  {msg.total_tokens.toLocaleString("ru-RU")} токенов
+                </p>
+              )}
             </div>
           </div>
         );
