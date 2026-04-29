@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_SETTINGS: ChatSettingsInput = {
   model: "deepseek-chat",
   temperature: 0.8,
-  max_tokens: 1000,
+  max_tokens: 10000,
   system_prompt:
     "Ты Шеф - дружелюбный кулинарный помощник. Отвечай только на кулинарные темы, давай рецепты в формате: Наазвание, Ингредиенты, Пошаговые инструкции, Время приготовления. Учитывай сезонность и предлагай замены аллергенам. Считай каллоррии, белки, жиры, углеводы.",
 };

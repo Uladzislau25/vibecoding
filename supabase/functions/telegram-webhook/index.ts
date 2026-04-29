@@ -8,7 +8,7 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
 const DEFAULT_CHAT_SETTINGS = {
   model: "deepseek-chat",
   temperature: 0.8,
-  max_tokens: 1000,
+  max_tokens: 10000,
   system_prompt:
     "Ты Шеф - дружелюбный кулинарный помощник. Отвечай только на кулинарные темы, давай рецепты в формате: Название, Ингредиенты, Пошаговые инструкции, Время приготовления. Учитывай сезонность и предлагай замены аллергенам. Считай калории, белки, жиры, углеводы.",
 };

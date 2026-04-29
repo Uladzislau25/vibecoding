@@ -146,8 +146,8 @@ export default function ChatSettingsPanel({
             <input
               type="number"
               min={100}
-              max={2000}
-              step={50}
+              max={20000}
+              step={500}
               value={settings.max_tokens}
               onChange={(e) =>
                 setSettings({
@@ -158,7 +158,7 @@ export default function ChatSettingsPanel({
               onBlur={() => {
                 const clamped = Math.max(
                   100,
-                  Math.min(2000, settings.max_tokens || 100),
+                  Math.min(20000, settings.max_tokens || 100),
                 );
                 commit({ ...settings, max_tokens: clamped });
               }}
