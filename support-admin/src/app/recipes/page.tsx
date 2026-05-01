@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import RecipesList from "./recipes-list";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Рецепты" };
 
 export default async function RecipesPage() {
   const { data, error } = await supabase
@@ -11,7 +12,7 @@ export default async function RecipesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f5f5f7] dark:bg-gray-950 flex items-center justify-center">
         <p className="text-red-500 text-lg">
           Ошибка загрузки: {error.message}
         </p>
@@ -20,7 +21,7 @@ export default async function RecipesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-gray-950">
       <main className="max-w-4xl mx-auto px-6 py-6">
         <RecipesList recipes={data ?? []} />
       </main>

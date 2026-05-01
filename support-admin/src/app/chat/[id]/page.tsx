@@ -9,6 +9,22 @@ import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { data } = await supabase
+    .from("clients")
+    .select("username, first_name, last_name, chat_id")
+    .eq("id", Number(id))
+    .single();
+
+  if (!data) return { title: "Чат" };
+  const name =
+    [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+    data.username ||
+    `User ${data.chat_id ?? id}`;
+  return { title: name };
+}
+
 const DEFAULT_SETTINGS: ChatSettingsInput = {
   model: "deepseek-chat",
   temperature: 0.8,
@@ -111,12 +127,12 @@ export default async function ChatPage({
     `User ${client.chat_id ?? client.id}`;
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-gray-950">
       <div className="max-w-3xl mx-auto px-6 py-4">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
             aria-label="Назад"
           >
             <svg
@@ -137,16 +153,16 @@ export default async function ChatPage({
             {display[0].toUpperCase()}
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">{display}</p>
-            <p className="text-xs text-gray-400">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{display}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               {client.username ? `@${client.username}` : `Chat ID: ${client.chat_id}`}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
               Токены
             </p>
-            <p className="text-sm font-semibold text-gray-700 tabular-nums">
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
               {totalTokens.toLocaleString("ru-RU")}
             </p>
           </div>
@@ -163,7 +179,7 @@ export default async function ChatPage({
         {isAssigned && currentManager ? (
           <ReplyForm clientId={clientId} managerId={currentManager.id} />
         ) : (
-          <div className="text-center text-xs text-gray-400 py-3">
+          <div className="text-center text-xs text-gray-400 dark:text-gray-500 py-3">
             {assignedManagerId
               ? "Ответить может только назначенный менеджер"
               : "Назначьте менеджера, чтобы ответить клиенту"}

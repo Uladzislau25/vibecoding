@@ -80,7 +80,7 @@ export default function MessagesList({
 
   if (messages.length === 0) {
     return (
-      <div className="text-center py-20 text-gray-400">
+      <div className="text-center py-20 text-gray-400 dark:text-gray-500">
         Сообщений пока нет
       </div>
     );
@@ -107,15 +107,15 @@ export default function MessagesList({
 
         const align = isClient ? "items-start" : "items-end";
         const bubble = isClient
-          ? "bg-white border border-gray-200/80"
+          ? "bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80"
           : isBot
-            ? "bg-purple-50 border border-purple-100"
-            : "bg-blue-50 border border-blue-100";
+            ? "bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900"
+            : "bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900";
         const senderColor = isClient
-          ? "text-gray-900"
+          ? "text-gray-900 dark:text-gray-100"
           : isBot
-            ? "text-purple-700"
-            : "text-blue-700";
+            ? "text-purple-700 dark:text-purple-400"
+            : "text-blue-700 dark:text-blue-400";
 
         return (
           <div key={msg.id} className={`flex flex-col ${align}`}>
@@ -126,15 +126,15 @@ export default function MessagesList({
                 <span className={`text-xs font-semibold ${senderColor}`}>
                   {sender}
                 </span>
-                <time className="text-[10px] text-gray-400 whitespace-nowrap">
+                <time className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
                   {time}
                 </time>
               </div>
-              <p className="mt-1 text-[14px] leading-relaxed text-gray-800 whitespace-pre-wrap">
+              <p className="mt-1 text-[14px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                 {msg.text}
               </p>
               {isBot && msg.total_tokens != null && (
-                <p className="mt-1.5 text-[10px] text-purple-500/80 tabular-nums">
+                <p className="mt-1.5 text-[10px] text-purple-500/80 dark:text-purple-400/80 tabular-nums">
                   {msg.total_tokens.toLocaleString("ru-RU")} токенов
                 </p>
               )}

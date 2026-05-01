@@ -37,7 +37,7 @@ export default function ReplyForm({ clientId, managerId }: Props) {
         e.preventDefault();
         send();
       }}
-      className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-2 flex flex-col gap-1"
+      className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm p-2 flex flex-col gap-1"
     >
       <div className="flex gap-2 items-end">
         <textarea
@@ -51,7 +51,7 @@ export default function ReplyForm({ clientId, managerId }: Props) {
           }}
           placeholder="Ответить как менеджер…"
           rows={1}
-          className="flex-1 resize-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 max-h-40"
+          className="flex-1 resize-none bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 max-h-40"
         />
         <button
           type="submit"

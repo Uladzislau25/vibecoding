@@ -47,12 +47,12 @@ export default function ChatSettingsPanel({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
       <div className="flex items-center justify-between px-5 py-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -70,7 +70,7 @@ export default function ChatSettingsPanel({
           </svg>
           Настройки чата
           {savingSettings && (
-            <span className="text-xs text-gray-400">сохранение…</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">сохранение…</span>
           )}
           {!savingSettings && savedAt && (
             <span className="text-xs text-green-600">сохранено</span>
@@ -83,8 +83,8 @@ export default function ChatSettingsPanel({
           disabled={savingStatus}
           className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
             status === "open"
-              ? "border-red-200 text-red-600 hover:bg-red-50"
-              : "border-green-200 text-green-600 hover:bg-green-50"
+              ? "border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+              : "border-green-200 dark:border-green-800 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
           }`}
         >
           {status === "open" ? "Закрыть чат" : "Открыть чат"}
@@ -92,9 +92,9 @@ export default function ChatSettingsPanel({
       </div>
 
       {open && (
-        <div className="border-t border-gray-100 px-5 py-4 flex flex-col gap-4">
+        <div className="border-t border-gray-100 dark:border-gray-800 px-5 py-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-gray-600">Модель</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Модель</span>
             <select
               value={settings.model}
               onChange={(e) =>
@@ -103,7 +103,7 @@ export default function ChatSettingsPanel({
                   model: e.target.value as ChatSettingsInput["model"],
                 })
               }
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
+              className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
             >
               {MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -115,10 +115,10 @@ export default function ChatSettingsPanel({
 
           <label className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600">
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Температура
               </span>
-              <span className="text-xs text-gray-500 tabular-nums">
+              <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                 {settings.temperature.toFixed(1)}
               </span>
             </div>
@@ -142,7 +142,7 @@ export default function ChatSettingsPanel({
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-gray-600">Max tokens</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Max tokens</span>
             <input
               type="number"
               min={100}
@@ -162,12 +162,12 @@ export default function ChatSettingsPanel({
                 );
                 commit({ ...settings, max_tokens: clamped });
               }}
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
+              className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-gray-600">
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
               System prompt
             </span>
             <textarea
@@ -177,7 +177,7 @@ export default function ChatSettingsPanel({
               }
               onBlur={() => commit(settings)}
               rows={6}
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors resize-y"
+              className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
             />
           </label>
         </div>

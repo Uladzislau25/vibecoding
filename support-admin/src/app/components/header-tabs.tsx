@@ -7,13 +7,14 @@ const TABS = [
   { href: "/", label: "Сообщения", match: (p: string) => p === "/" || p.startsWith("/chat") },
   { href: "/recipes", label: "База рецептов", match: (p: string) => p.startsWith("/recipes") },
   { href: "/history", label: "История", match: (p: string) => p.startsWith("/history") },
+  { href: "/stats", label: "Статистика", match: (p: string) => p.startsWith("/stats") },
 ];
 
 export default function HeaderTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="hidden md:flex items-center gap-1">
       {TABS.map((tab) => {
         const active = tab.match(pathname);
         return (
@@ -23,7 +24,7 @@ export default function HeaderTabs() {
             className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
               active
                 ? "bg-gray-900 text-white"
-                : "text-gray-600 hover:bg-gray-100"
+                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
             }`}
           >
             {tab.label}

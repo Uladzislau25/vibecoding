@@ -1,13 +1,21 @@
 import { supabase } from "@/lib/supabase";
-import ChatCard from "@/app/components/chat-card";
+import { createSupabaseServer } from "@/lib/supabase-server";
+import ChatList from "@/app/components/chat-list";
+import Landing from "@/app/components/landing";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Сообщения" };
 
 export default async function Home() {
+  const supabaseServer = await createSupabaseServer();
+  const { data: { user } } = await supabaseServer.auth.getUser();
+
+  if (!user) return <Landing />;
+
   const [clientsRes, managersRes] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, chat_id, user_id, username, first_name, last_name, messages(id, text, created_at), client_assignments(assigned_manager_id)")
+      .select("id, chat_id, username, first_name, last_name, status, messages(id, text, created_at), client_assignments(assigned_manager_id)")
       .order("created_at", { referencedTable: "messages", ascending: false })
       .limit(1, { referencedTable: "messages" }),
     supabase.from("managers").select("id, name, position").order("name"),
@@ -28,50 +36,23 @@ export default async function Home() {
       const ta = new Date(a.messages[0].created_at).getTime();
       const tb = new Date(b.messages[0].created_at).getTime();
       return tb - ta;
-    });
+    })
+    .map((c) => ({
+      id: c.id,
+      display:
+        [c.first_name, c.last_name].filter(Boolean).join(" ") ||
+        c.username ||
+        `User ${c.chat_id ?? c.id}`,
+      lastMessageText: c.messages[0].text,
+      time: new Date(c.messages[0].created_at).toLocaleString("ru-RU", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      currentManagerId: c.client_assignments?.assigned_manager_id ?? null,
+      status: c.status ?? null,
+    }));
 
-  return (
-    <div className="min-h-screen bg-[#f5f5f7]">
-      <div className="max-w-3xl mx-auto px-6 py-4">
-        <div className="text-sm text-gray-500">
-          Чатов: <span className="font-medium text-gray-700">{chats.length}</span>
-        </div>
-      </div>
-
-      <main className="max-w-3xl mx-auto px-6 pb-8 flex flex-col gap-2">
-        {chats.map((client) => {
-          const display =
-            [client.first_name, client.last_name].filter(Boolean).join(" ") ||
-            client.username ||
-            `User ${client.chat_id ?? client.id}`;
-          const lastMsg = client.messages[0];
-          const time = new Date(lastMsg.created_at).toLocaleString("ru-RU", {
-            day: "numeric",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const currentManagerId = client.client_assignments?.assigned_manager_id ?? null;
-
-          return (
-            <ChatCard
-              key={client.id}
-              clientId={client.id}
-              display={display}
-              lastMessageText={lastMsg.text}
-              time={time}
-              managers={managers}
-              currentManagerId={currentManagerId}
-            />
-          );
-        })}
-
-        {chats.length === 0 && (
-          <div className="text-center py-20 text-gray-400">
-            Чатов пока нет
-          </div>
-        )}
-      </main>
-    </div>
-  );
+  return <ChatList chats={chats} managers={managers} />;
 }

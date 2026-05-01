@@ -13,6 +13,7 @@ export default function ChatCard({
   time,
   managers,
   currentManagerId,
+  status,
 }: {
   clientId: number;
   display: string;
@@ -20,6 +21,7 @@ export default function ChatCard({
   time: string;
   managers: Manager[];
   currentManagerId: number | null;
+  status?: string | null;
 }) {
   const [selected, setSelected] = useState(currentManagerId?.toString() ?? "");
   const [isPending, startTransition] = useTransition();
@@ -35,7 +37,7 @@ export default function ChatCard({
   }
 
   return (
-    <div className="flex items-center gap-4 bg-white rounded-2xl border border-gray-200/80 px-5 py-4 shadow-sm hover:bg-gray-50 transition-colors">
+    <div className="flex items-center gap-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 px-5 py-4 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
       <Link
         href={`/chat/${clientId}`}
         className="flex items-center gap-4 flex-1 min-w-0"
@@ -44,15 +46,22 @@ export default function ChatCard({
           {display[0].toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-900 truncate">
-              {display}
-            </p>
-            <time className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                {display}
+              </p>
+              {status === "closed" && (
+                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 font-medium">
+                  закрыт
+                </span>
+              )}
+            </div>
+            <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
               {time}
             </time>
           </div>
-          <p className="text-sm text-gray-500 truncate mt-0.5">
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
             {lastMessageText}
           </p>
         </div>
@@ -65,7 +74,7 @@ export default function ChatCard({
           value={selected}
           onChange={handleChange}
           disabled={isPending}
-          className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors disabled:opacity-50 max-w-[120px]"
+          className="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors disabled:opacity-50 max-w-[120px]"
         >
           <option value="">—</option>
           {managers.map((m) => (
