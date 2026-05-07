@@ -13,6 +13,9 @@ const DEFAULT_CHAT_SETTINGS = {
     "Ты Шеф - дружелюбный кулинарный помощник. Отвечай только на кулинарные темы, давай рецепты в формате: Название, Ингредиенты, Пошаговые инструкции, Время приготовления. Учитывай сезонность и предлагай замены аллергенам. Считай калории, белки, жиры, углеводы.",
 };
 
+const ESCALATION_MESSAGE =
+  "👨‍🍳 Шеф-повар: К сожалению, я не смогу помочь с этим запросом. С вами свяжется наш специалист в ближайшее время.";
+
 const supabase = createClient<Database>(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -51,6 +54,7 @@ type TokenUsage = {
 };
 
 type GeneratedRecipe = {
+  can_help: boolean;
   title: string;
   ingredients: string;
   instructions: string;
@@ -59,13 +63,16 @@ type GeneratedRecipe = {
 };
 
 const JSON_SCHEMA_INSTRUCTION = `
-Верни ответ строго в формате JSON со следующими полями:
+Верни ответ строго в формате JSON:
 {
+  "can_help": true,
   "title": "краткое название рецепта (до 256 символов)",
   "ingredients": "список ингредиентов с количествами, по одному на строку",
   "instructions": "пошаговые инструкции приготовления",
-  "reply_text": "полный готовый ответ пользователю в свободной форме (название, ингредиенты, шаги, время, КБЖУ — всё, что обычно)"
+  "reply_text": "полный готовый ответ пользователю (название, ингредиенты, шаги, время, КБЖУ)"
 }
+Если запрос не относится к кулинарии или ты не можешь помочь — верни:
+{"can_help": false, "title": "", "ingredients": "", "instructions": "", "reply_text": ""}
 Никакого текста вне JSON. Только валидный JSON.`;
 
 async function generateRecipeWithDeepSeek(
@@ -108,6 +115,7 @@ async function generateRecipeWithDeepSeek(
   };
 
   return {
+    can_help: parsed.can_help !== false,
     title: (parsed.title ?? "Рецепт").slice(0, 256),
     ingredients: parsed.ingredients ?? "",
     instructions: parsed.instructions ?? "",
@@ -156,11 +164,32 @@ Deno.serve(async (req) => {
         },
         { onConflict: "chat_id" },
       )
-      .select("id")
+      .select("id, escalation_status")
       .single();
 
     if (clientError || !client) {
       console.error("Failed to upsert client:", clientError);
+      return new Response("OK", { status: 200 });
+    }
+
+    // Always save the incoming user message
+    const { error: dbError } = await supabase
+      .from("messages")
+      .insert({
+        client_id: client.id,
+        text: message.text,
+      });
+
+    if (dbError) {
+      console.error("Failed to save message:", dbError);
+      return new Response("OK", { status: 200 });
+    }
+
+    // Bot is paused while manager is handling this chat
+    if (
+      client.escalation_status === "escalated" ||
+      client.escalation_status === "manager_active"
+    ) {
       return new Response("OK", { status: 200 });
     }
 
@@ -178,18 +207,6 @@ Deno.serve(async (req) => {
         DEFAULT_CHAT_SETTINGS.system_prompt,
     };
 
-    const { error: dbError } = await supabase
-      .from("messages")
-      .insert({
-        client_id: client.id,
-        text: message.text,
-      });
-
-    if (dbError) {
-      console.error("Failed to save message:", dbError);
-      return new Response("OK", { status: 200 });
-    }
-
     await sendTypingAction(message.chat.id);
 
     let reply: string;
@@ -198,6 +215,8 @@ Deno.serve(async (req) => {
       completion_tokens: null,
       total_tokens: null,
     };
+    let escalated = false;
+
     try {
       const queryEmbedding = await createEmbedding(message.text, "query");
       const queryEmbeddingLiteral = JSON.stringify(queryEmbedding);
@@ -224,40 +243,42 @@ Deno.serve(async (req) => {
         );
         usage = generated.usage;
 
-        const { data: existing } = await supabase
-          .from("recipes")
-          .select("description, title")
-          .ilike("title", generated.title.trim())
-          .limit(1)
-          .maybeSingle();
-
-        if (existing) {
-          reply = existing.description ?? generated.reply_text;
+        if (!generated.can_help) {
+          escalated = true;
+          reply = ESCALATION_MESSAGE;
         } else {
-          const passageInput = [
-            generated.title,
-            generated.reply_text,
-            generated.ingredients,
-            generated.instructions,
-          ].filter(Boolean).join("\n\n");
-          const passageEmbedding = await createEmbedding(
-            passageInput,
-            "passage",
-          );
+          const { data: existing } = await supabase
+            .from("recipes")
+            .select("description, title")
+            .ilike("title", generated.title.trim())
+            .limit(1)
+            .maybeSingle();
 
-          const { error: insertError } = await supabase.from("recipes").insert({
-            title: generated.title,
-            description: generated.reply_text,
-            ingredients: generated.ingredients,
-            instructions: generated.instructions,
-            embedding: JSON.stringify(passageEmbedding),
-          });
+          if (existing) {
+            reply = existing.description ?? generated.reply_text;
+          } else {
+            const passageInput = [
+              generated.title,
+              generated.reply_text,
+              generated.ingredients,
+              generated.instructions,
+            ].filter(Boolean).join("\n\n");
+            const passageEmbedding = await createEmbedding(passageInput, "passage");
 
-          if (insertError) {
-            console.error("Failed to save recipe:", insertError);
+            const { error: insertError } = await supabase.from("recipes").insert({
+              title: generated.title,
+              description: generated.reply_text,
+              ingredients: generated.ingredients,
+              instructions: generated.instructions,
+              embedding: JSON.stringify(passageEmbedding),
+            });
+
+            if (insertError) {
+              console.error("Failed to save recipe:", insertError);
+            }
+
+            reply = generated.reply_text;
           }
-
-          reply = generated.reply_text;
         }
       }
     } catch (err) {
@@ -278,6 +299,16 @@ Deno.serve(async (req) => {
     });
     if (botInsertError) {
       console.error("Failed to save bot reply:", botInsertError);
+    }
+
+    if (escalated) {
+      const { error: escalateError } = await supabase
+        .from("clients")
+        .update({ escalation_status: "escalated" })
+        .eq("id", client.id);
+      if (escalateError) {
+        console.error("Failed to set escalation_status:", escalateError);
+      }
     }
 
     return new Response("OK", { status: 200 });

@@ -43,9 +43,14 @@ export async function updateChatStatus(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Не авторизован");
 
+  const updateData: Record<string, string> = { status };
+  if (status === "closed") {
+    updateData.escalation_status = "normal";
+  }
+
   const { error } = await supabase
     .from("clients")
-    .update({ status })
+    .update(updateData)
     .eq("id", clientId);
   if (error) throw new Error(error.message);
 

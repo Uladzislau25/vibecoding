@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export type RecipeInput = {
@@ -10,17 +11,9 @@ export type RecipeInput = {
   instructions: string;
 };
 
-async function requireUser() {
-  const supabase = await createSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Не авторизован");
-  return supabase;
-}
-
 export async function createRecipe(input: RecipeInput) {
-  const supabase = await requireUser();
+  await requireRole("admin", "manager");
+  const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase.functions.invoke("add-recipe", {
     body: input,
@@ -32,7 +25,8 @@ export async function createRecipe(input: RecipeInput) {
 }
 
 export async function updateRecipe(id: number, input: RecipeInput) {
-  const supabase = await requireUser();
+  await requireRole("admin", "manager");
+  const supabase = await createSupabaseServer();
 
   const { data, error } = await supabase.functions.invoke("add-recipe", {
     body: { id, ...input },
@@ -44,7 +38,8 @@ export async function updateRecipe(id: number, input: RecipeInput) {
 }
 
 export async function deleteRecipe(id: number) {
-  const supabase = await requireUser();
+  await requireRole("admin", "manager");
+  const supabase = await createSupabaseServer();
 
   const { error } = await supabase.from("recipes").delete().eq("id", id);
   if (error) throw new Error(error.message);

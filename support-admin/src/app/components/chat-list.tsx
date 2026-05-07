@@ -14,12 +14,14 @@ export type Chat = {
   time: string;
   currentManagerId: number | null;
   status: string | null;
+  escalationStatus: string | null;
 };
 
-type Filter = "all" | "unassigned" | "open" | "closed";
+type Filter = "all" | "unassigned" | "open" | "closed" | "escalated";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Все" },
+  { value: "escalated", label: "Эскалация" },
   { value: "unassigned", label: "Без менеджера" },
   { value: "open", label: "Открытые" },
   { value: "closed", label: "Закрытые" },
@@ -41,13 +43,21 @@ export default function ChatList({
     const supabase = getSupabaseBrowser();
 
     const channel = supabase
-      .channel("home-messages")
+      .channel("home-updates")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         () => {
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
           refreshTimer.current = setTimeout(() => router.refresh(), 800);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "clients" },
+        () => {
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          refreshTimer.current = setTimeout(() => router.refresh(), 300);
         }
       )
       .subscribe();
@@ -66,9 +76,13 @@ export default function ChatList({
     if (filter === "unassigned") return c.currentManagerId === null;
     if (filter === "open") return c.status !== "closed";
     if (filter === "closed") return c.status === "closed";
+    if (filter === "escalated") return c.escalationStatus === "escalated" || c.escalationStatus === "manager_active";
     return true;
   });
 
+  const escalatedCount = chats.filter(
+    (c) => c.escalationStatus === "escalated" || c.escalationStatus === "manager_active"
+  ).length;
   const unassignedCount = chats.filter((c) => c.currentManagerId === null).length;
 
   return (
@@ -79,6 +93,11 @@ export default function ChatList({
             <span>
               Чатов: <span className="font-medium text-gray-700 dark:text-gray-300">{chats.length}</span>
             </span>
+            {escalatedCount > 0 && (
+              <span className="px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs font-medium">
+                Эскалация: {escalatedCount}
+              </span>
+            )}
             {unassignedCount > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-medium">
                 Без менеджера: {unassignedCount}
@@ -94,14 +113,16 @@ export default function ChatList({
           />
         </div>
 
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
               className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 filter === f.value
-                  ? "bg-gray-900 text-white"
+                  ? f.value === "escalated"
+                    ? "bg-red-600 text-white"
+                    : "bg-gray-900 text-white"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
               }`}
             >
@@ -122,6 +143,7 @@ export default function ChatList({
             managers={managers}
             currentManagerId={chat.currentManagerId}
             status={chat.status}
+            escalationStatus={chat.escalationStatus}
           />
         ))}
 

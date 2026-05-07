@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/forgot-password", "/reset-password"];
+
+function isPublicPath(pathname: string) {
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+}
+
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next({
     request: { headers: request.headers },
@@ -29,19 +35,41 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isPublic =
-    pathname === "/" ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/auth/callback") ||
-    pathname.startsWith("/forgot-password") ||
-    pathname.startsWith("/reset-password");
 
-  if (!user && !isPublic) {
+  if (!user && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (user && (pathname.startsWith("/login") || pathname.startsWith("/forgot-password"))) {
     return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("managers")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      if (!isPublicPath(pathname)) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      return response;
+    }
+
+    const role = profile.role as string;
+
+    if (role === "user") {
+      if (!pathname.startsWith("/recipes") && !isPublicPath(pathname)) {
+        return NextResponse.redirect(new URL("/recipes", request.url));
+      }
+    } else if (role === "manager") {
+      if (pathname.startsWith("/admin")) {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+    }
+    // admin: full access
   }
 
   return response;

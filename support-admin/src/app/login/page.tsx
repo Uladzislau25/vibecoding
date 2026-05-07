@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { login } from "./actions";
+import GoogleOAuthButton from "./google-oauth-button";
 
 export const metadata: Metadata = { title: "Вход" };
 
@@ -18,21 +19,29 @@ export default async function LoginPage({
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             ChefBot
           </h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Войдите в админ-панель</p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Войдите в панель</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm p-6 flex flex-col gap-4">
           {error && (
-            <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+            <div className="rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
 
           {message && (
-            <div className="mb-4 rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+            <div className="rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-400">
               {message}
             </div>
           )}
+
+          <GoogleOAuthButton />
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            <span className="text-xs text-gray-400 dark:text-gray-500">или</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
 
           <form className="flex flex-col gap-4">
             <div>

@@ -14,6 +14,7 @@ export default function ChatCard({
   managers,
   currentManagerId,
   status,
+  escalationStatus,
 }: {
   clientId: number;
   display: string;
@@ -22,6 +23,7 @@ export default function ChatCard({
   managers: Manager[];
   currentManagerId: number | null;
   status?: string | null;
+  escalationStatus?: string | null;
 }) {
   const [selected, setSelected] = useState(currentManagerId?.toString() ?? "");
   const [isPending, startTransition] = useTransition();
@@ -36,14 +38,29 @@ export default function ChatCard({
     });
   }
 
+  const borderClass =
+    escalationStatus === "escalated"
+      ? "border-red-400 dark:border-red-600 bg-red-50/60 dark:bg-red-950/20"
+      : escalationStatus === "manager_active"
+        ? "border-amber-400 dark:border-amber-500 bg-amber-50/60 dark:bg-amber-950/20"
+        : "border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900";
+
   return (
-    <div className="flex items-center gap-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 px-5 py-4 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+    <div className={`flex items-center gap-4 rounded-2xl border px-5 py-4 shadow-sm hover:brightness-95 transition-all ${borderClass}`}>
       <Link
         href={`/chat/${clientId}`}
         className="flex items-center gap-4 flex-1 min-w-0"
       >
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-          {display[0].toUpperCase()}
+        <div className="relative shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+            {display[0].toUpperCase()}
+          </div>
+          {escalationStatus === "escalated" && (
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white dark:border-gray-900" />
+          )}
+          {escalationStatus === "manager_active" && (
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white dark:border-gray-900" />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -51,7 +68,17 @@ export default function ChatCard({
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                 {display}
               </p>
-              {status === "closed" && (
+              {escalationStatus === "escalated" && (
+                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 font-medium border border-red-200 dark:border-red-800">
+                  ждёт менеджера
+                </span>
+              )}
+              {escalationStatus === "manager_active" && (
+                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-medium border border-amber-200 dark:border-amber-800">
+                  в работе
+                </span>
+              )}
+              {status === "closed" && escalationStatus === "normal" && (
                 <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 font-medium">
                   закрыт
                 </span>

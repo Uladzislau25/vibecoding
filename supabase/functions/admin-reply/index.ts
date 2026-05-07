@@ -7,6 +7,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const REPLY_PREFIX = "👨‍🍳 Шеф-повар: ";
+const MANAGER_JOINED_MESSAGE = "👨‍🍳 Шеф-повар: С вами сейчас работает наш специалист.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,6 +24,20 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const admin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+async function sendTelegramMessage(chatId: number, text: string) {
+  const res = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    },
+  );
+  const body = await res.json();
+  if (!body.ok) console.error("Telegram sendMessage error:", body);
+  return body.ok;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -75,7 +90,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await admin
       .from("clients")
-      .select("id, chat_id")
+      .select("id, chat_id, escalation_status")
       .eq("id", chatId)
       .maybeSingle();
 
@@ -96,6 +111,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    // First manager message to an escalated chat → notify user and set manager_active
+    const isFirstManagerResponse = client.escalation_status === "escalated";
+
+    if (isFirstManagerResponse) {
+      await admin
+        .from("clients")
+        .update({ escalation_status: "manager_active" })
+        .eq("id", client.id);
+
+      await sendTelegramMessage(client.chat_id, MANAGER_JOINED_MESSAGE);
+    }
+
     const { error: insertError } = await admin.from("messages").insert({
       client_id: client.id,
       text: messageText,
@@ -108,25 +135,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to save message" }, 500);
     }
 
-    const tgRes = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: client.chat_id,
-          text: `${REPLY_PREFIX}${messageText}`,
-        }),
-      },
+    const tgOk = await sendTelegramMessage(
+      client.chat_id,
+      `${REPLY_PREFIX}${messageText}`,
     );
 
-    const tgBody = await tgRes.json();
-    if (!tgBody.ok) {
-      console.error("Telegram sendMessage error:", tgBody);
-      return jsonResponse(
-        { error: "Telegram delivery failed", details: tgBody },
-        502,
-      );
+    if (!tgOk) {
+      return jsonResponse({ error: "Telegram delivery failed" }, 502);
     }
 
     return jsonResponse({ ok: true });

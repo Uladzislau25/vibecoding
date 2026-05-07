@@ -46,10 +46,11 @@ const EMPTY: RecipeInput = {
 
 type FormState =
   | { mode: "closed" }
+  | { mode: "view"; recipe: Recipe }
   | { mode: "create" }
   | { mode: "edit"; id: number };
 
-export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
+export default function RecipesList({ recipes, canEdit }: { recipes: Recipe[]; canEdit: boolean }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ mode: "closed" });
@@ -83,6 +84,10 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
       );
     });
   }, [categorized, search, category]);
+
+  function openView(r: Recipe) {
+    setForm({ mode: "view", recipe: r });
+  }
 
   function openCreate() {
     setDraft(EMPTY);
@@ -133,6 +138,7 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
     startDelete(async () => {
       try {
         await deleteRecipe(id);
+        if (form.mode === "view" && form.recipe.id === id) closeForm();
       } catch (e) {
         alert(e instanceof Error ? e.message : "Ошибка удаления");
       } finally {
@@ -140,6 +146,8 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
       }
     });
   }
+
+  const isModalOpen = form.mode !== "closed";
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,13 +159,15 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
           placeholder="Поиск по названию, ингредиентам, инструкциям…"
           className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-500 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
         />
-        <button
-          type="button"
-          onClick={openCreate}
-          className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-        >
-          Добавить
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={openCreate}
+            className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            Добавить
+          </button>
+        )}
       </div>
 
       {Object.keys(usedCategories).length > 1 && (
@@ -197,20 +207,17 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
             <tr>
               <th className="text-left px-4 py-3 font-medium">Название</th>
-              <th className="text-left px-4 py-3 font-medium hidden md:table-cell">
-                Ингредиенты
-              </th>
-              <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">
-                Создан
-              </th>
-              <th className="px-4 py-3 w-32"></th>
+              <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Ингредиенты</th>
+              <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Создан</th>
+              <th className="px-4 py-3 w-24"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => (
               <tr
                 key={r.id}
-                className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50"
+                className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 cursor-pointer"
+                onClick={() => openView(r)}
               >
                 <td className="px-4 py-3 align-top">
                   <div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
@@ -223,7 +230,7 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
                   )}
                 </td>
                 <td className="px-4 py-3 align-top hidden md:table-cell">
-                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3 max-w-xs">
+                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 max-w-xs">
                     {r.ingredients}
                   </div>
                 </td>
@@ -234,36 +241,33 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
                     year: "numeric",
                   })}
                 </td>
-                <td className="px-4 py-3 align-top">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(r)}
-                      className="text-xs px-2.5 py-1 rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      Изм.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete(r.id)}
-                      disabled={deletingPending && deletingId === r.id}
-                      className="text-xs px-2.5 py-1 rounded-md border border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
-                    >
-                      Удал.
-                    </button>
-                  </div>
+                <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
+                  {canEdit && (
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+                        className="text-xs px-2.5 py-1 rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        Изм.
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); confirmDelete(r.id); }}
+                        disabled={deletingPending && deletingId === r.id}
+                        className="text-xs px-2.5 py-1 rounded-md border border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                      >
+                        Удал.
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td
-                  colSpan={4}
-                  className="px-4 py-12 text-center text-gray-400 dark:text-gray-500 text-sm"
-                >
-                  {recipes.length === 0
-                    ? "Рецептов пока нет"
-                    : "Ничего не найдено"}
+                <td colSpan={4} className="px-4 py-12 text-center text-gray-400 dark:text-gray-500 text-sm">
+                  {recipes.length === 0 ? "Рецептов пока нет" : "Ничего не найдено"}
                 </td>
               </tr>
             )}
@@ -271,112 +275,171 @@ export default function RecipesList({ recipes }: { recipes: Recipe[] }) {
         </table>
       </div>
 
-      {form.mode !== "closed" && (
+      {isModalOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/30 flex items-start justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-20 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
           onClick={closeForm}
         >
           <div
-            className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mt-10 p-6 flex flex-col gap-4"
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mt-10 mb-10 p-6 flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {form.mode === "edit" ? "Редактировать рецепт" : "Новый рецепт"}
-              </h2>
-              <button
-                type="button"
-                onClick={closeForm}
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-xl leading-none px-2"
-                aria-label="Закрыть"
-              >
-                ×
-              </button>
-            </div>
+            {/* View mode */}
+            {form.mode === "view" && (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-snug">
+                    {form.recipe.title}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-xl leading-none px-2 shrink-0"
+                    aria-label="Закрыть"
+                  >
+                    ×
+                  </button>
+                </div>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Название *
-              </span>
-              <input
-                type="text"
-                value={draft.title}
-                onChange={(e) =>
-                  setDraft({ ...draft, title: e.target.value })
-                }
-                maxLength={256}
-                className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
-              />
-            </label>
+                {form.recipe.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    {form.recipe.description}
+                  </p>
+                )}
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Описание</span>
-              <textarea
-                value={draft.description}
-                onChange={(e) =>
-                  setDraft({ ...draft, description: e.target.value })
-                }
-                rows={3}
-                className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
-              />
-            </label>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                    Ингредиенты
+                  </p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+                    {form.recipe.ingredients}
+                  </p>
+                </div>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Ингредиенты *
-              </span>
-              <textarea
-                value={draft.ingredients}
-                onChange={(e) =>
-                  setDraft({ ...draft, ingredients: e.target.value })
-                }
-                rows={5}
-                className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
-              />
-            </label>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                    Инструкции
+                  </p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+                    {form.recipe.instructions}
+                  </p>
+                </div>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Инструкции *
-              </span>
-              <textarea
-                value={draft.instructions}
-                onChange={(e) =>
-                  setDraft({ ...draft, instructions: e.target.value })
-                }
-                rows={6}
-                className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
-              />
-            </label>
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Добавлен:{" "}
+                  {new Date(form.recipe.created_at).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
 
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2">
-                {error}
-              </p>
+                {canEdit && (
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      type="button"
+                      onClick={() => confirmDelete(form.recipe.id)}
+                      disabled={deletingPending}
+                      className="text-sm font-medium px-4 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                    >
+                      Удалить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(form.recipe)}
+                      className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      Редактировать
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={closeForm}
-                disabled={submitting}
-                className="text-sm font-medium px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={submitting}
-                className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {submitting
-                  ? "Сохранение…"
-                  : form.mode === "edit"
-                    ? "Сохранить"
-                    : "Добавить"}
-              </button>
-            </div>
+            {/* Create / Edit mode */}
+            {(form.mode === "create" || form.mode === "edit") && (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    {form.mode === "edit" ? "Редактировать рецепт" : "Новый рецепт"}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-xl leading-none px-2"
+                    aria-label="Закрыть"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Название *</span>
+                  <input
+                    type="text"
+                    value={draft.title}
+                    onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                    maxLength={256}
+                    className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Описание</span>
+                  <textarea
+                    value={draft.description}
+                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                    rows={3}
+                    className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Ингредиенты *</span>
+                  <textarea
+                    value={draft.ingredients}
+                    onChange={(e) => setDraft({ ...draft, ingredients: e.target.value })}
+                    rows={5}
+                    className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Инструкции *</span>
+                  <textarea
+                    value={draft.instructions}
+                    onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
+                    rows={6}
+                    className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
+                  />
+                </label>
+
+                {error && (
+                  <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2">
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    disabled={submitting}
+                    className="text-sm font-medium px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={submitting}
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {submitting ? "Сохранение…" : form.mode === "edit" ? "Сохранить" : "Добавить"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
