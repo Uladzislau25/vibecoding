@@ -16,6 +16,37 @@ const DEFAULT_CHAT_SETTINGS = {
 const ESCALATION_MESSAGE =
   "👨‍🍳 Шеф-повар: К сожалению, я не смогу помочь с этим запросом. С вами свяжется наш специалист в ближайшее время.";
 
+const GRATITUDE_KEYWORDS = [
+  "спасибо", "спс", "благодарю", "благодарствую", "пасиб", "пасибо",
+  "сяб", "thanks", "thank you", "thx",
+];
+const FAREWELL_KEYWORDS = [
+  "пока", "до свидания", "до встречи", "всего доброго", "до скорого",
+  "прощай", "прощайте", "бай", "bye", "goodbye", "увидимся", "до завтра",
+  "всего хорошего", "счастливо",
+];
+const GRATITUDE_REPLIES = [
+  "Пожалуйста! Приятного аппетита 😊 Если понадобится ещё рецепт — обращайтесь!",
+  "Рад помочь! Готовьте с удовольствием 🍽️",
+  "Всегда пожалуйста! Буду ждать новых кулинарных вопросов 👨‍🍳",
+];
+const FAREWELL_REPLIES = [
+  "До свидания! Возвращайтесь, когда захотите что-нибудь приготовить 👨‍🍳",
+  "Пока-пока! Приятного аппетита и до встречи 🍽️",
+  "До скорого! Буду ждать ваших кулинарных вопросов 😊",
+];
+
+function detectCasual(text: string): "gratitude" | "farewell" | null {
+  const lower = text.toLowerCase().trim();
+  if (GRATITUDE_KEYWORDS.some((kw) => lower.includes(kw))) return "gratitude";
+  if (FAREWELL_KEYWORDS.some((kw) => lower.includes(kw))) return "farewell";
+  return null;
+}
+
+function pickRandom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 const supabase = createClient<Database>(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -149,6 +180,16 @@ Deno.serve(async (req) => {
           "Учитываю сезонность и подскажу замены, если есть аллергии или непереносимость.\n\n" +
           "Например: «борщ», «что приготовить из курицы и риса», «лёгкий ужин на двоих».",
       );
+      return new Response("OK", { status: 200 });
+    }
+
+    // Gratitude and farewell — respond warmly, do not save to database
+    const casualType = detectCasual(message.text);
+    if (casualType) {
+      const reply = casualType === "gratitude"
+        ? pickRandom(GRATITUDE_REPLIES)
+        : pickRandom(FAREWELL_REPLIES);
+      await sendTelegramMessage(message.chat.id, reply);
       return new Response("OK", { status: 200 });
     }
 
