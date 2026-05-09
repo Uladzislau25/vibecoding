@@ -50,7 +50,7 @@ const MAIN_KEYBOARD = {
     [{ text: "🛒 Список покупок" }, { text: "⚙️ Предпочтения" }],
   ],
   resize_keyboard: true,
-  persistent: true,
+  is_persistent: true,
 };
 
 function detectCasual(text: string): "gratitude" | "farewell" | null {
@@ -68,6 +68,10 @@ function pickRandom(arr: string[]): string {
 function extractServings(text: string): number | null {
   const match = text.match(/на\s+(\d+)\s*(человек|порци[ий]|персон)/i);
   return match ? parseInt(match[1]) : null;
+}
+
+function stripMarkdown(text: string): string {
+  return text.replace(/\*+/g, "").replace(/^#+\s*/gm, "").trim();
 }
 
 // deno-lint-ignore no-explicit-any
@@ -89,9 +93,12 @@ async function tgPost(method: string, body: object) {
   return json;
 }
 
+const MAX_TG_LEN = 4096;
+
 // Default reply_markup is MAIN_KEYBOARD for all plain messages
 async function sendMessage(chatId: number, text: string, replyMarkup: object = MAIN_KEYBOARD) {
-  return tgPost("sendMessage", { chat_id: chatId, text, reply_markup: replyMarkup });
+  const safe = text.length > MAX_TG_LEN ? text.slice(0, MAX_TG_LEN - 3) + "..." : text;
+  return tgPost("sendMessage", { chat_id: chatId, text: safe, reply_markup: replyMarkup });
 }
 
 async function sendPhoto(chatId: number, photoUrl: string, caption: string, replyMarkup: object) {
@@ -131,7 +138,11 @@ function recipeKeyboard(recipeId: number) {
 
 function clarifyKeyboard(options: string[]) {
   return {
-    inline_keyboard: options.map((opt) => [{ text: opt, callback_data: `clarify:${opt}` }]),
+    inline_keyboard: options.map((opt) => [{
+      text: opt,
+      // callback_data limit: 64 bytes UTF-8; "clarify:" = 8 bytes, Cyrillic = 2 bytes/char → 28 chars max
+      callback_data: `clarify:${opt.slice(0, 28)}`,
+    }]),
   };
 }
 
@@ -190,7 +201,7 @@ const CATEGORY_LIST = RECIPE_CATEGORIES.join(", ");
 const JSON_SCHEMA_INSTRUCTION = `
 Верни ответ строго в формате JSON. Возможны три варианта:
 
-1. Если запрос кулинарный, но нужно уточнить детали для хорошего рецепта — задай один уточняющий вопрос (не более 3 вопросов подряд без рецепта) и предложи варианты ответа:
+1. Если пользователь назвал блюдо без деталей (например просто "борщ", "паста", "пирог", "салат", "суп") — ОБЯЗАТЕЛЬНО уточни какой именно вариант он хочет. Предложи 3-4 конкретных варианта. Не более 3 уточнений подряд без рецепта:
 {"need_clarification": true, "question": "твой вопрос", "options": ["Вариант 1", "Вариант 2", "Вариант 3"], "can_help": true, "title": "", "category": "", "ingredients": "", "instructions": "", "reply_text": ""}
 
 2. Если деталей достаточно — дай рецепт:
@@ -323,9 +334,9 @@ async function processRecipeRequest(
 
     if (searchError) console.error("search_recipes error:", searchError);
 
-    if (matches && matches.length > 0) {
+    if (matches && matches.length > 0 && matches[0].similarity >= 0.88) {
       const recipe = matches[0];
-      reply = recipe.description ?? recipe.title;
+      reply = stripMarkdown(recipe.description ?? recipe.title);
       replyRecipeId = recipe.id;
     } else {
       const generated = await generateRecipe(
@@ -382,10 +393,8 @@ async function processRecipeRequest(
           replyRecipeId = newRecipe?.id ?? null;
         }
 
-        // Fetch photo from Unsplash for non-cached recipes
-        if (replyRecipeId !== null) {
-          photoUrl = await fetchUnsplashPhoto(generated.title);
-        }
+        // Photo sending disabled pending Telegram URL compatibility check
+        void photoUrl;
       }
     }
   } catch (err) {
@@ -393,17 +402,15 @@ async function processRecipeRequest(
     reply = "Извините, сейчас не получается подобрать рецепт. Попробуйте, пожалуйста, чуть позже.";
   }
 
+  // Strip legacy markdown from all replies
+  reply = stripMarkdown(reply);
+
   // Send response
   if (clarifyOptions.length > 0) {
     // Clarification: inline buttons for options, no MAIN_KEYBOARD (can't combine)
     await sendMessage(chatId, reply, clarifyKeyboard(clarifyOptions));
   } else if (replyRecipeId !== null) {
-    const keyboard = recipeKeyboard(replyRecipeId);
-    if (photoUrl) {
-      await sendPhoto(chatId, photoUrl, reply.slice(0, 1024), keyboard);
-    } else {
-      await sendMessage(chatId, reply, keyboard);
-    }
+    await sendMessage(chatId, reply, recipeKeyboard(replyRecipeId));
   } else {
     await sendMessage(chatId, reply);
   }
@@ -469,6 +476,9 @@ async function handleCallbackQuery(query: {
     // Remove clarification keyboard from previous message
     await removeKeyboard(chatId, messageId);
     await answerCallback(queryId);
+
+    // Echo the selected option so user sees their choice in chat
+    await sendMessage(chatId, `👉 ${selectedText}`);
 
     // Load settings + preferences + history to run full recipe flow
     const [settingsResult, prefsResult, historyResult] = await Promise.all([

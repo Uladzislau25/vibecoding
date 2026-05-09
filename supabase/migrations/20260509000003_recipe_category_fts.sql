@@ -1,8 +1,11 @@
 -- Add category column to recipes
 alter table recipes add column if not exists category text;
 
--- Drop old search_recipes signature, replace with hybrid version
+-- Drop all old overloads of search_recipes before replacing
 drop function if exists search_recipes(vector, int);
+drop function if exists search_recipes(vector(1024), int);
+drop function if exists search_recipes(vector, int, float);
+drop function if exists search_recipes(vector(1024), int, float);
 
 create or replace function search_recipes(
   query_embedding vector(1024),
