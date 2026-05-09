@@ -4,7 +4,6 @@ import { createEmbedding } from "../_shared/embeddings.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
-const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY") ?? "";
 const RATE_LIMIT_PER_HOUR = 20;
 
 const DEFAULT_CHAT_SETTINGS = {
@@ -17,6 +16,18 @@ const DEFAULT_CHAT_SETTINGS = {
 
 const ESCALATION_MESSAGE =
   "👨‍🍳 Шеф-повар: К сожалению, я не смогу помочь с этим запросом. С вами свяжется наш специалист в ближайшее время.";
+
+const GREETING_KEYWORDS = [
+  "привет", "здравствуй", "здравствуйте", "хай", "хей", "приветствую",
+  "добрый день", "добрый вечер", "доброе утро", "добрый", "доброго",
+  "hello", "hi", "hey", "good morning", "good evening",
+];
+const GREETING_REPLIES = [
+  "Привет! Я Шеф — ваш кулинарный помощник 👨‍🍳 Что будем готовить сегодня?",
+  "Здравствуйте! Готов помочь с рецептом. Что хотите приготовить? 🍽️",
+  "Привет! Расскажите, что хочется приготовить — подберу рецепт 😊",
+  "Добро пожаловать! Назовите блюдо, и я пришлю рецепт с ингредиентами и пошаговыми инструкциями 👨‍🍳",
+];
 
 const GRATITUDE_KEYWORDS = [
   "спасибо", "спс", "благодарю", "благодарствую", "пасиб", "пасибо",
@@ -53,8 +64,9 @@ const MAIN_KEYBOARD = {
   is_persistent: true,
 };
 
-function detectCasual(text: string): "gratitude" | "farewell" | null {
+function detectCasual(text: string): "greeting" | "gratitude" | "farewell" | null {
   const lower = text.toLowerCase().trim();
+  if (GREETING_KEYWORDS.some((kw) => lower.includes(kw))) return "greeting";
   if (GRATITUDE_KEYWORDS.some((kw) => lower.includes(kw))) return "gratitude";
   if (FAREWELL_KEYWORDS.some((kw) => lower.includes(kw))) return "farewell";
   return null;
@@ -101,15 +113,6 @@ async function sendMessage(chatId: number, text: string, replyMarkup: object = M
   return tgPost("sendMessage", { chat_id: chatId, text: safe, reply_markup: replyMarkup });
 }
 
-async function sendPhoto(chatId: number, photoUrl: string, caption: string, replyMarkup: object) {
-  return tgPost("sendPhoto", {
-    chat_id: chatId,
-    photo: photoUrl,
-    caption,
-    reply_markup: replyMarkup,
-  });
-}
-
 async function sendTyping(chatId: number) {
   return tgPost("sendChatAction", { chat_id: chatId, action: "typing" });
 }
@@ -144,21 +147,6 @@ function clarifyKeyboard(options: string[]) {
       callback_data: `clarify:${opt.slice(0, 28)}`,
     }]),
   };
-}
-
-// ─── Unsplash ─────────────────────────────────────────────────────────────────
-
-async function fetchUnsplashPhoto(query: string): Promise<string | null> {
-  if (!PEXELS_API_KEY) return null;
-  try {
-    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
-    const res = await fetch(url, { headers: { Authorization: PEXELS_API_KEY } });
-    if (!res.ok) return null;
-    const body = await res.json();
-    return (body.photos?.[0]?.src?.large as string) ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -321,7 +309,6 @@ async function processRecipeRequest(
   let replyRecipeId: number | null = null;
   let usage: TokenUsage = { prompt_tokens: null, completion_tokens: null, total_tokens: null };
   let escalated = false;
-  let photoUrl: string | null = null;
   let clarifyOptions: string[] = [];
 
   try {
@@ -393,8 +380,6 @@ async function processRecipeRequest(
           replyRecipeId = newRecipe?.id ?? null;
         }
 
-        // Photo sending disabled pending Telegram URL compatibility check
-        void photoUrl;
       }
     }
   } catch (err) {
@@ -826,8 +811,12 @@ Deno.serve(async (req) => {
       if (client.setup_state) {
         await db.from("clients").update({ setup_state: null }).eq("id", client.id);
       }
-      const reply = casualType === "gratitude" ? pickRandom(GRATITUDE_REPLIES) : pickRandom(FAREWELL_REPLIES);
+      const reply =
+        casualType === "greeting" ? pickRandom(GREETING_REPLIES) :
+        casualType === "gratitude" ? pickRandom(GRATITUDE_REPLIES) :
+        pickRandom(FAREWELL_REPLIES);
       await sendMessage(chatId, reply);
+      await saveBotReply(client.id, reply);
       return new Response("OK", { status: 200 });
     }
 
