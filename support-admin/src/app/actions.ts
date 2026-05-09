@@ -56,6 +56,18 @@ export async function updateChatStatus(
   revalidatePath("/");
 }
 
+export async function getRecipesForPicker(search: string = "") {
+  const supabase = await createSupabaseServer();
+  let q = supabase
+    .from("recipes")
+    .select("id, title, category")
+    .order("created_at", { ascending: false })
+    .limit(60);
+  if (search.trim()) q = q.ilike("title", `%${search.trim()}%`);
+  const { data } = await q;
+  return (data ?? []) as { id: number; title: string; category: string | null }[];
+}
+
 export async function assignManager(clientId: number, managerId: number | null) {
   const supabase = await createSupabaseServer();
 

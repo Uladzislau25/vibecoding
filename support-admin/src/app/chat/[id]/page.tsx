@@ -7,6 +7,7 @@ import MessagesList from "./messages-list";
 import ReplyForm from "./reply-form";
 import ChatAssignBar from "./chat-assign-bar";
 import ReturnToBotButton from "./return-to-bot-button";
+import RecipePicker from "./recipe-picker";
 import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -192,7 +193,12 @@ export default async function ChatPage({
         )}
 
         {isAssigned && currentManager ? (
-          <ReplyForm clientId={clientId} managerId={currentManager.id} />
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-end">
+              <RecipePicker clientId={clientId} managerId={currentManager.id} />
+            </div>
+            <ReplyForm clientId={clientId} managerId={currentManager.id} />
+          </div>
         ) : (
           <div className="text-center text-xs text-gray-400 dark:text-gray-500 py-3">
             {assignedManagerId

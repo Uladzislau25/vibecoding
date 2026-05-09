@@ -25,13 +25,13 @@ function jsonResponse(body: unknown, status = 200) {
 
 const admin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-async function sendTelegramMessage(chatId: number, text: string) {
+async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: object) {
   const res = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text, reply_markup: replyMarkup }),
     },
   );
   const body = await res.json();
@@ -64,14 +64,27 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const chatId = Number(body?.chatId);
-    const messageText = typeof body?.message === "string" ? body.message.trim() : "";
     const managerId = Number(body?.managerId);
+    const recipeId = body?.recipeId ? Number(body.recipeId) : null;
+    let messageText = typeof body?.message === "string" ? body.message.trim() : "";
 
-    if (!chatId || !messageText || !managerId) {
-      return jsonResponse(
-        { error: "chatId, message and managerId are required" },
-        400,
-      );
+    if (!chatId || !managerId) {
+      return jsonResponse({ error: "chatId and managerId are required" }, 400);
+    }
+
+    // If recipeId provided — fetch recipe text from DB
+    if (recipeId) {
+      const { data: recipe } = await admin
+        .from("recipes")
+        .select("id, title, description")
+        .eq("id", recipeId)
+        .maybeSingle();
+      if (!recipe) return jsonResponse({ error: "Recipe not found" }, 404);
+      messageText = recipe.description ?? recipe.title;
+    }
+
+    if (!messageText) {
+      return jsonResponse({ error: "message or recipeId is required" }, 400);
     }
 
     const { data: manager, error: managerError } = await admin
@@ -128,6 +141,7 @@ Deno.serve(async (req) => {
       text: messageText,
       sender_type: "manager",
       manager_id: managerId,
+      recipe_id: recipeId ?? null,
     });
 
     if (insertError) {
@@ -135,9 +149,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to save message" }, 500);
     }
 
+    const recipeKeyboard = recipeId ? {
+      inline_keyboard: [[
+        { text: "👍", callback_data: `rate:${recipeId}:1` },
+        { text: "👎", callback_data: `rate:${recipeId}:-1` },
+        { text: "⭐ Сохранить", callback_data: `save:${recipeId}` },
+      ]],
+    } : undefined;
+
     const tgOk = await sendTelegramMessage(
       client.chat_id,
-      `${REPLY_PREFIX}${messageText}`,
+      recipeId ? messageText : `${REPLY_PREFIX}${messageText}`,
+      recipeKeyboard,
     );
 
     if (!tgOk) {
