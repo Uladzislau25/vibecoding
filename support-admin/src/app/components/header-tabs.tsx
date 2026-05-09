@@ -8,6 +8,7 @@ type Role = "admin" | "manager" | "user";
 const ALL_TABS = [
   { href: "/", label: "Сообщения", match: (p: string) => p === "/" || p.startsWith("/chat"), roles: ["admin", "manager"] },
   { href: "/recipes", label: "База рецептов", match: (p: string) => p.startsWith("/recipes"), roles: ["admin", "manager", "user"] },
+  { href: "/dashboard", label: "Дашборд", match: (p: string) => p.startsWith("/dashboard"), roles: ["admin", "manager"] },
   { href: "/history", label: "История", match: (p: string) => p.startsWith("/history"), roles: ["admin", "manager"] },
   { href: "/stats", label: "Статистика", match: (p: string) => p.startsWith("/stats"), roles: ["admin", "manager"] },
   { href: "/admin/users", label: "Пользователи", match: (p: string) => p.startsWith("/admin"), roles: ["admin"] },

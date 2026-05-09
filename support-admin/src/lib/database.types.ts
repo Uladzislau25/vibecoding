@@ -247,15 +247,18 @@ export type Database = {
       }
       recipes: {
         Row: {
+          category: string | null
           created_at: string
           description: string | null
           embedding: string | null
+          fts: string | null
           id: number
           ingredients: string
           instructions: string
           title: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           description?: string | null
           embedding?: string | null
@@ -265,6 +268,7 @@ export type Database = {
           title: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           description?: string | null
           embedding?: string | null
@@ -281,8 +285,9 @@ export type Database = {
     }
     Functions: {
       search_recipes: {
-        Args: { match_count?: number; query_embedding: string }
+        Args: { match_count?: number; query_embedding: string; query_text?: string }
         Returns: {
+          category: string | null
           description: string
           id: number
           ingredients: string

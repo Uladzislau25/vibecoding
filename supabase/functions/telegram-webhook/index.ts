@@ -4,6 +4,7 @@ import { createEmbedding } from "../_shared/embeddings.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")!;
+const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY") ?? "";
 const RATE_LIMIT_PER_HOUR = 20;
 
 const DEFAULT_CHAT_SETTINGS = {
@@ -37,6 +38,21 @@ const FAREWELL_REPLIES = [
   "До скорого! Буду ждать ваших кулинарных вопросов 😊",
 ];
 
+const RECIPE_CATEGORIES = [
+  "Супы", "Салаты", "Основные блюда", "Десерты",
+  "Завтраки", "Закуски", "Выпечка", "Напитки", "Другое",
+];
+
+// Persistent reply keyboard shown for all non-inline messages
+const MAIN_KEYBOARD = {
+  keyboard: [
+    [{ text: "🎲 Случайный рецепт" }, { text: "⭐ Избранное" }],
+    [{ text: "🛒 Список покупок" }, { text: "⚙️ Предпочтения" }],
+  ],
+  resize_keyboard: true,
+  persistent: true,
+};
+
 function detectCasual(text: string): "gratitude" | "farewell" | null {
   const lower = text.toLowerCase().trim();
   if (GRATITUDE_KEYWORDS.some((kw) => lower.includes(kw))) return "gratitude";
@@ -46,6 +62,12 @@ function detectCasual(text: string): "gratitude" | "farewell" | null {
 
 function pickRandom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Detect "на X человек/порций/персон" in user text
+function extractServings(text: string): number | null {
+  const match = text.match(/на\s+(\d+)\s*(человек|порци[ий]|персон)/i);
+  return match ? parseInt(match[1]) : null;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -67,8 +89,18 @@ async function tgPost(method: string, body: object) {
   return json;
 }
 
-async function sendMessage(chatId: number, text: string, replyMarkup?: object) {
+// Default reply_markup is MAIN_KEYBOARD for all plain messages
+async function sendMessage(chatId: number, text: string, replyMarkup: object = MAIN_KEYBOARD) {
   return tgPost("sendMessage", { chat_id: chatId, text, reply_markup: replyMarkup });
+}
+
+async function sendPhoto(chatId: number, photoUrl: string, caption: string, replyMarkup: object) {
+  return tgPost("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption,
+    reply_markup: replyMarkup,
+  });
 }
 
 async function sendTyping(chatId: number) {
@@ -97,6 +129,27 @@ function recipeKeyboard(recipeId: number) {
   };
 }
 
+function clarifyKeyboard(options: string[]) {
+  return {
+    inline_keyboard: options.map((opt) => [{ text: opt, callback_data: `clarify:${opt}` }]),
+  };
+}
+
+// ─── Unsplash ─────────────────────────────────────────────────────────────────
+
+async function fetchUnsplashPhoto(query: string): Promise<string | null> {
+  if (!PEXELS_API_KEY) return null;
+  try {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
+    const res = await fetch(url, { headers: { Authorization: PEXELS_API_KEY } });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return (body.photos?.[0]?.src?.large as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type TokenUsage = {
@@ -113,34 +166,46 @@ type ConversationMessage = {
 type GeneratedRecipe = {
   need_clarification: boolean;
   question: string;
+  options: string[];
   can_help: boolean;
   title: string;
+  category: string;
   ingredients: string;
   instructions: string;
   reply_text: string;
   usage: TokenUsage;
 };
 
+type ClientSettings = {
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  system_prompt: string;
+};
+
 // ─── AI generation ───────────────────────────────────────────────────────────
+
+const CATEGORY_LIST = RECIPE_CATEGORIES.join(", ");
 
 const JSON_SCHEMA_INSTRUCTION = `
 Верни ответ строго в формате JSON. Возможны три варианта:
 
-1. Если запрос кулинарный, но нужно уточнить детали для хорошего рецепта — задай один уточняющий вопрос (не более 3 вопросов подряд без рецепта):
-{"need_clarification": true, "question": "твой вопрос", "can_help": true, "title": "", "ingredients": "", "instructions": "", "reply_text": ""}
+1. Если запрос кулинарный, но нужно уточнить детали для хорошего рецепта — задай один уточняющий вопрос (не более 3 вопросов подряд без рецепта) и предложи варианты ответа:
+{"need_clarification": true, "question": "твой вопрос", "options": ["Вариант 1", "Вариант 2", "Вариант 3"], "can_help": true, "title": "", "category": "", "ingredients": "", "instructions": "", "reply_text": ""}
 
 2. Если деталей достаточно — дай рецепт:
 {
   "need_clarification": false,
   "can_help": true,
   "title": "краткое название рецепта (до 256 символов)",
+  "category": "одна из: ${CATEGORY_LIST}",
   "ingredients": "список ингредиентов с количествами, каждый с новой строки через • (например: • Свёкла — 300 г)",
   "instructions": "пошаговые инструкции, каждый шаг с новой строки пронумерован (например: 1. Нарезать...)",
-  "reply_text": "полный ответ пользователю строго по шаблону:\n🍽️ {название}\n\n🛒 Ингредиенты:\n{ингредиенты через •}\n\n👨‍🍳 Приготовление:\n{пронумерованные шаги}\n\n⏱️ Время приготовления: {время}\n🍽️ Порций: {количество}\n\n📊 Пищевая ценность (на 1 порцию):\n• Калории: {X} ккал\n• Белки: {X} г\n• Жиры: {X} г\n• Углеводы: {X} г"
+  "reply_text": "полный ответ пользователю строго по шаблону:\\n🍽️ {название}\\n\\n🛒 Ингредиенты:\\n{ингредиенты через •}\\n\\n👨‍🍳 Приготовление:\\n{пронумерованные шаги}\\n\\n⏱️ Время приготовления: {время}\\n🍽️ Порций: {количество}\\n\\n📊 Пищевая ценность (на 1 порцию):\\n• Калории: {X} ккал\\n• Белки: {X} г\\n• Жиры: {X} г\\n• Углеводы: {X} г"
 }
 
 3. Если запрос не кулинарный:
-{"need_clarification": false, "can_help": false, "title": "", "ingredients": "", "instructions": "", "reply_text": ""}
+{"need_clarification": false, "can_help": false, "title": "", "category": "", "ingredients": "", "instructions": "", "reply_text": ""}
 
 Никакого текста вне JSON. Только валидный JSON. Никаких символов *** или ## в тексте.`;
 
@@ -177,8 +242,10 @@ async function generateRecipe(
   return {
     need_clarification: parsed.need_clarification === true,
     question: parsed.question ?? "",
+    options: Array.isArray(parsed.options) ? parsed.options.slice(0, 6) : [],
     can_help: parsed.can_help !== false,
     title: (parsed.title ?? "Рецепт").slice(0, 256),
+    category: RECIPE_CATEGORIES.includes(parsed.category ?? "") ? (parsed.category ?? "Другое") : "Другое",
     ingredients: parsed.ingredients ?? "",
     instructions: parsed.instructions ?? "",
     reply_text: parsed.reply_text ?? content,
@@ -188,6 +255,164 @@ async function generateRecipe(
       total_tokens: typeof u.total_tokens === "number" ? u.total_tokens : null,
     },
   };
+}
+
+// Generate meal plan for 7 days via DeepSeek (plain text, no JSON schema)
+async function generateWeekPlan(dietaryNotes: string | null | undefined): Promise<string> {
+  const dietLine = dietaryNotes ? `Учитывай предпочтения пользователя: ${dietaryNotes}.` : "";
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      temperature: 0.9,
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Ты Шеф — кулинарный помощник. Составь план питания на 7 дней (завтрак, обед, ужин). " +
+            "Используй только эмодзи и обычный текст. Никаких *** или ## markdown. " +
+            dietLine,
+        },
+        {
+          role: "user",
+          content: "Составь план питания на 7 дней с завтраком, обедом и ужином.",
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`DeepSeek week plan error: ${res.status}`);
+  const body = await res.json();
+  return body.choices[0].message.content as string;
+}
+
+// ─── Core recipe processing ───────────────────────────────────────────────────
+
+async function processRecipeRequest(
+  chatId: number,
+  clientId: number,
+  text: string,
+  settings: ClientSettings,
+  systemPromptBase: string,
+  history: ConversationMessage[],
+  contextQuery: string,
+): Promise<void> {
+  // Detect serving count override
+  const servings = extractServings(text);
+  const systemPrompt = servings
+    ? `${systemPromptBase}\n\nПользователь хочет рецепт на ${servings} порций.`
+    : systemPromptBase;
+
+  await sendTyping(chatId);
+
+  let reply: string;
+  let replyRecipeId: number | null = null;
+  let usage: TokenUsage = { prompt_tokens: null, completion_tokens: null, total_tokens: null };
+  let escalated = false;
+  let photoUrl: string | null = null;
+  let clarifyOptions: string[] = [];
+
+  try {
+    const queryEmbedding = await createEmbedding(contextQuery, "query");
+    const { data: matches, error: searchError } = await db.rpc("search_recipes", {
+      query_embedding: JSON.stringify(queryEmbedding),
+      query_text: contextQuery,
+      match_count: 1,
+    });
+
+    if (searchError) console.error("search_recipes error:", searchError);
+
+    if (matches && matches.length > 0) {
+      const recipe = matches[0];
+      reply = recipe.description ?? recipe.title;
+      replyRecipeId = recipe.id;
+    } else {
+      const generated = await generateRecipe(
+        settings.model,
+        systemPrompt,
+        history,
+        text,
+        settings.temperature,
+        settings.max_tokens,
+      );
+      usage = generated.usage;
+
+      if (generated.need_clarification) {
+        clarifyOptions = generated.options;
+        reply = generated.question;
+      } else if (!generated.can_help) {
+        escalated = true;
+        reply = ESCALATION_MESSAGE;
+      } else {
+        const passageInput = [generated.title, generated.reply_text, generated.ingredients, generated.instructions]
+          .filter(Boolean)
+          .join("\n\n");
+        const passageEmbedding = await createEmbedding(passageInput, "passage");
+
+        const { data: newRecipe, error: insertError } = await db
+          .from("recipes")
+          .insert({
+            title: generated.title,
+            category: generated.category || null,
+            description: generated.reply_text,
+            ingredients: generated.ingredients,
+            instructions: generated.instructions,
+            embedding: JSON.stringify(passageEmbedding),
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          if (insertError.code === "23505") {
+            const { data: existing } = await db
+              .from("recipes")
+              .select("id, description")
+              .ilike("title", generated.title.trim())
+              .limit(1)
+              .maybeSingle();
+            reply = existing?.description ?? generated.reply_text;
+            replyRecipeId = existing?.id ?? null;
+          } else {
+            console.error("Failed to save recipe:", insertError);
+            reply = generated.reply_text;
+          }
+        } else {
+          reply = generated.reply_text;
+          replyRecipeId = newRecipe?.id ?? null;
+        }
+
+        // Fetch photo from Unsplash for non-cached recipes
+        if (replyRecipeId !== null) {
+          photoUrl = await fetchUnsplashPhoto(generated.title);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to build reply:", err);
+    reply = "Извините, сейчас не получается подобрать рецепт. Попробуйте, пожалуйста, чуть позже.";
+  }
+
+  // Send response
+  if (clarifyOptions.length > 0) {
+    // Clarification: inline buttons for options, no MAIN_KEYBOARD (can't combine)
+    await sendMessage(chatId, reply, clarifyKeyboard(clarifyOptions));
+  } else if (replyRecipeId !== null) {
+    const keyboard = recipeKeyboard(replyRecipeId);
+    if (photoUrl) {
+      await sendPhoto(chatId, photoUrl, reply.slice(0, 1024), keyboard);
+    } else {
+      await sendMessage(chatId, reply, keyboard);
+    }
+  } else {
+    await sendMessage(chatId, reply);
+  }
+
+  await saveBotReply(clientId, reply, replyRecipeId, usage);
+
+  if (escalated) {
+    await db.from("clients").update({ escalation_status: "escalated" }).eq("id", clientId);
+  }
 }
 
 // ─── Callback query handler ───────────────────────────────────────────────────
@@ -231,6 +456,60 @@ async function handleCallbackQuery(query: {
     return;
   }
 
+  if (data.startsWith("clarify:")) {
+    const selectedText = data.slice("clarify:".length);
+
+    // Save the selected option as a client message
+    await db.from("messages").insert({
+      client_id: client.id,
+      text: selectedText,
+      telegram_message_id: null,
+    });
+
+    // Remove clarification keyboard from previous message
+    await removeKeyboard(chatId, messageId);
+    await answerCallback(queryId);
+
+    // Load settings + preferences + history to run full recipe flow
+    const [settingsResult, prefsResult, historyResult] = await Promise.all([
+      db.from("chat_settings").select("model, temperature, max_tokens, system_prompt").eq("client_id", client.id).maybeSingle(),
+      db.from("client_preferences").select("dietary_notes").eq("client_id", client.id).maybeSingle(),
+      db.from("messages").select("text, sender_type").eq("client_id", client.id).order("created_at", { ascending: false }).limit(10),
+    ]);
+
+    const settingsRow = settingsResult.data;
+    const settings: ClientSettings = {
+      model: settingsRow?.model ?? DEFAULT_CHAT_SETTINGS.model,
+      temperature: settingsRow?.temperature ?? DEFAULT_CHAT_SETTINGS.temperature,
+      max_tokens: settingsRow?.max_tokens ?? DEFAULT_CHAT_SETTINGS.max_tokens,
+      system_prompt: settingsRow?.system_prompt ?? DEFAULT_CHAT_SETTINGS.system_prompt,
+    };
+
+    const dietaryNotes = prefsResult.data?.dietary_notes;
+    const systemPrompt = dietaryNotes
+      ? `${settings.system_prompt}\n\nПользователь указал предпочтения: ${dietaryNotes}. Всегда учитывай это при составлении рецептов.`
+      : settings.system_prompt;
+
+    const chronologicalHistory = (historyResult.data ?? []).reverse();
+    const conversationHistory: ConversationMessage[] = chronologicalHistory
+      .slice(0, -1)
+      .map((m: { text: string; sender_type: string }) => ({
+        role: m.sender_type === "bot" ? "assistant" as const : "user" as const,
+        content: m.text,
+      }));
+
+    await processRecipeRequest(
+      chatId,
+      client.id,
+      selectedText,
+      settings,
+      systemPrompt,
+      conversationHistory,
+      selectedText,
+    );
+    return;
+  }
+
   await answerCallback(queryId);
 }
 
@@ -271,8 +550,17 @@ Deno.serve(async (req) => {
     const message = update.message;
     if (!message?.text) return new Response("OK", { status: 200 });
 
-    const text = message.text.trim();
+    const rawText = message.text.trim();
     const chatId: number = message.chat.id;
+
+    // Map reply keyboard buttons to commands
+    const buttonCommandMap: Record<string, string> = {
+      "🎲 Случайный рецепт": "/random",
+      "⭐ Избранное": "/saved",
+      "🛒 Список покупок": "/list",
+      "⚙️ Предпочтения": "/preferences",
+    };
+    const text = buttonCommandMap[rawText] ?? rawText;
 
     console.log(`Message from ${message.from?.first_name} (${message.from?.id}): ${text}`);
 
@@ -282,8 +570,10 @@ Deno.serve(async (req) => {
         chatId,
         "Привет! Я Шеф — ваш кулинарный помощник 👨‍🍳\n\n" +
           "Расскажите, что хотите приготовить, или просто назовите блюдо — пришлю рецепт с ингредиентами, пошаговыми инструкциями, временем готовки и КБЖУ.\n\n" +
-          "🥗 Есть диетические ограничения или аллергии? Настройте через /preferences.\n\n" +
+          "🥗 Есть диетические ограничения или аллергии? Настройте через кнопку ⚙️ Предпочтения.\n\n" +
           "Команды:\n" +
+          "/random — случайный рецепт 🎲\n" +
+          "/week — план питания на 7 дней 📅\n" +
           "/save — сохранить последний рецепт ⭐\n" +
           "/saved — мои сохранённые рецепты\n" +
           "/list — список покупок для последнего рецепта 🛒\n" +
@@ -292,7 +582,7 @@ Deno.serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
-    // Upsert client, select setup_state (new column via migration)
+    // Upsert client
     const { data: client, error: clientError } = await db
       .from("clients")
       .upsert(
@@ -313,7 +603,7 @@ Deno.serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
-    // Save user message with telegram_message_id for idempotency
+    // Save user message (idempotency via telegram_message_id)
     const { error: msgError } = await db.from("messages").insert({
       client_id: client.id,
       text,
@@ -322,14 +612,13 @@ Deno.serve(async (req) => {
 
     if (msgError) {
       if (msgError.code === "23505") {
-        // Telegram resent the same message — skip processing
         return new Response("OK", { status: 200 });
       }
       console.error("Failed to save message:", msgError);
       return new Response("OK", { status: 200 });
     }
 
-    // Bot is paused while manager is handling this chat
+    // Bot is paused while manager is handling
     if (client.escalation_status === "escalated" || client.escalation_status === "manager_active") {
       return new Response("OK", { status: 200 });
     }
@@ -427,6 +716,54 @@ Deno.serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // /random — random recipe from DB
+    if (text === "/random") {
+      await sendTyping(chatId);
+      const { data: randomRecipe } = await db
+        .from("recipes")
+        .select("id, title, description")
+        .order("id", { ascending: false })
+        .limit(100)
+        .then(({ data }: { data: { id: number; title: string; description: string | null }[] | null }) => {
+          if (!data || data.length === 0) return { data: null };
+          const pick = data[Math.floor(Math.random() * data.length)];
+          return { data: pick };
+        });
+
+      let reply: string;
+      if (!randomRecipe) {
+        reply = "Рецептов пока нет в базе. Попросите приготовить что-нибудь!";
+        await sendMessage(chatId, reply);
+        await saveBotReply(client.id, reply);
+      } else {
+        reply = randomRecipe.description ?? randomRecipe.title;
+        await sendMessage(chatId, reply, recipeKeyboard(randomRecipe.id));
+        await saveBotReply(client.id, reply, randomRecipe.id);
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    // /week — 7-day meal plan
+    if (text === "/week") {
+      await sendTyping(chatId);
+      const { data: prefs } = await db
+        .from("client_preferences")
+        .select("dietary_notes")
+        .eq("client_id", client.id)
+        .maybeSingle();
+      try {
+        const plan = await generateWeekPlan(prefs?.dietary_notes);
+        await sendMessage(chatId, plan);
+        await saveBotReply(client.id, plan);
+      } catch (err) {
+        console.error("Week plan error:", err);
+        const reply = "Не удалось составить план питания. Попробуйте позже.";
+        await sendMessage(chatId, reply);
+        await saveBotReply(client.id, reply);
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     // ── Rate limiting ─────────────────────────────────────────────────────────
 
     const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString();
@@ -487,7 +824,7 @@ Deno.serve(async (req) => {
     // ── Recipe request ────────────────────────────────────────────────────────
 
     const settingsRow = settingsResult.data;
-    const settings = {
+    const settings: ClientSettings = {
       model: settingsRow?.model ?? DEFAULT_CHAT_SETTINGS.model,
       temperature: settingsRow?.temperature ?? DEFAULT_CHAT_SETTINGS.temperature,
       max_tokens: settingsRow?.max_tokens ?? DEFAULT_CHAT_SETTINGS.max_tokens,
@@ -499,10 +836,7 @@ Deno.serve(async (req) => {
       ? `${settings.system_prompt}\n\nПользователь указал предпочтения: ${dietaryNotes}. Всегда учитывай это при составлении рецептов.`
       : settings.system_prompt;
 
-    // Build chronological history (history is loaded newest-first, reverse to chronological)
     const chronologicalHistory = (historyResult.data ?? []).reverse();
-
-    // For DeepSeek: exclude the current user message (it's passed as the last message separately)
     const conversationHistory: ConversationMessage[] = chronologicalHistory
       .slice(0, -1)
       .map((m: { text: string; sender_type: string }) => ({
@@ -510,104 +844,21 @@ Deno.serve(async (req) => {
         content: m.text,
       }));
 
-    // For semantic search: combine last 2 user messages for context-aware matching
     const contextQuery = chronologicalHistory
       .filter((m: { sender_type: string }) => m.sender_type === "client")
       .slice(-2)
       .map((m: { text: string }) => m.text)
       .join(" ") || text;
 
-    await sendTyping(chatId);
-
-    let reply: string;
-    let replyRecipeId: number | null = null;
-    let usage: TokenUsage = { prompt_tokens: null, completion_tokens: null, total_tokens: null };
-    let escalated = false;
-
-    try {
-      const queryEmbedding = await createEmbedding(contextQuery, "query");
-      const { data: matches, error: searchError } = await db.rpc("search_recipes", {
-        query_embedding: JSON.stringify(queryEmbedding),
-        match_count: 1,
-      });
-
-      if (searchError) console.error("search_recipes error:", searchError);
-
-      if (matches && matches.length > 0) {
-        // Found in DB — return cached recipe with keyboard
-        const recipe = matches[0];
-        reply = recipe.description ?? recipe.title;
-        replyRecipeId = recipe.id;
-      } else {
-        // Generate with DeepSeek
-        const generated = await generateRecipe(
-          settings.model,
-          systemPrompt,
-          conversationHistory,
-          text,
-          settings.temperature,
-          settings.max_tokens,
-        );
-        usage = generated.usage;
-
-        if (generated.need_clarification) {
-          reply = generated.question;
-        } else if (!generated.can_help) {
-          escalated = true;
-          reply = ESCALATION_MESSAGE;
-        } else {
-          // Save new recipe
-          const passageInput = [generated.title, generated.reply_text, generated.ingredients, generated.instructions]
-            .filter(Boolean)
-            .join("\n\n");
-          const passageEmbedding = await createEmbedding(passageInput, "passage");
-
-          const { data: newRecipe, error: insertError } = await db
-            .from("recipes")
-            .insert({
-              title: generated.title,
-              description: generated.reply_text,
-              ingredients: generated.ingredients,
-              instructions: generated.instructions,
-              embedding: JSON.stringify(passageEmbedding),
-            })
-            .select("id")
-            .single();
-
-          if (insertError) {
-            if (insertError.code === "23505") {
-              // Duplicate title — fetch existing
-              const { data: existing } = await db
-                .from("recipes")
-                .select("id, description")
-                .ilike("title", generated.title.trim())
-                .limit(1)
-                .maybeSingle();
-              reply = existing?.description ?? generated.reply_text;
-              replyRecipeId = existing?.id ?? null;
-            } else {
-              console.error("Failed to save recipe:", insertError);
-              reply = generated.reply_text;
-            }
-          } else {
-            reply = generated.reply_text;
-            replyRecipeId = newRecipe?.id ?? null;
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to build reply:", err);
-      reply = "Извините, сейчас не получается подобрать рецепт. Попробуйте, пожалуйста, чуть позже.";
-    }
-
-    // Send reply — attach rating/save keyboard when sending a recipe
-    const keyboard = replyRecipeId !== null ? recipeKeyboard(replyRecipeId) : undefined;
-    await sendMessage(chatId, reply, keyboard);
-    await saveBotReply(client.id, reply, replyRecipeId, usage);
-
-    if (escalated) {
-      await db.from("clients").update({ escalation_status: "escalated" }).eq("id", client.id);
-    }
+    await processRecipeRequest(
+      chatId,
+      client.id,
+      text,
+      settings,
+      systemPrompt,
+      conversationHistory,
+      contextQuery,
+    );
 
     return new Response("OK", { status: 200 });
   } catch (err) {

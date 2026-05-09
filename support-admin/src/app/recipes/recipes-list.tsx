@@ -20,7 +20,10 @@ const CATEGORIES: { label: string; keywords: string[] }[] = [
   { label: "Закуски", keywords: ["закуска", "бутерброд", "канапе", "намазка", "паштет"] },
 ];
 
-function getCategory(recipe: { title: string; description: string | null; ingredients: string }): string {
+function getCategory(recipe: { title: string; description: string | null; ingredients: string; category: string | null }): string {
+  // Use DB category if present and recognised
+  if (recipe.category) return recipe.category;
+  // Fallback: keyword matching
   const text = `${recipe.title} ${recipe.description ?? ""} ${recipe.ingredients}`.toLowerCase();
   for (const cat of CATEGORIES) {
     if (cat.keywords.some((kw) => text.includes(kw))) return cat.label;
@@ -34,6 +37,7 @@ type Recipe = {
   description: string | null;
   ingredients: string;
   instructions: string;
+  category: string | null;
   created_at: string;
 };
 
