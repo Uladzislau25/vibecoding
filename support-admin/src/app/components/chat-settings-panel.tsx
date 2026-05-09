@@ -13,9 +13,43 @@ type Props = {
   initialStatus: "open" | "closed";
 };
 
-const MODELS: { value: ChatSettingsInput["model"]; label: string }[] = [
-  { value: "deepseek-chat", label: "deepseek-chat" },
-  { value: "deepseek-reasoner", label: "deepseek-reasoner" },
+type ModelMeta = {
+  value: ChatSettingsInput["model"];
+  label: string;
+  tier: string;
+  tierClass: string;
+  hint: string;
+};
+
+const MODELS: ModelMeta[] = [
+  {
+    value: "deepseek-chat",
+    label: "deepseek-chat",
+    tier: "Базовая",
+    tierClass: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400",
+    hint: "Быстрее всего, подходит для большинства задач",
+  },
+  {
+    value: "deepseek-v3-0324",
+    label: "deepseek-v3-0324",
+    tier: "Мощная",
+    tierClass: "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400",
+    hint: "Сильная общая модель, лучше понимает контекст",
+  },
+  {
+    value: "deepseek-reasoner",
+    label: "deepseek-reasoner",
+    tier: "Думает",
+    tierClass: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400",
+    hint: "Рассуждает пошагово, точнее в сложных вопросах",
+  },
+  {
+    value: "deepseek-r1-0528",
+    label: "deepseek-r1-0528",
+    tier: "Топ",
+    tierClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400",
+    hint: "Самая мощная, медленнее",
+  },
 ];
 
 export default function ChatSettingsPanel({
@@ -93,53 +127,36 @@ export default function ChatSettingsPanel({
 
       {open && (
         <div className="border-t border-gray-100 dark:border-gray-800 px-5 py-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Модель</span>
-            <select
-              value={settings.model}
-              onChange={(e) =>
-                commit({
-                  ...settings,
-                  model: e.target.value as ChatSettingsInput["model"],
-                })
-              }
-              className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
-            >
-              {MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                Температура
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                {settings.temperature.toFixed(1)}
-              </span>
+            <div className="flex flex-col gap-1">
+              {MODELS.map((m) => {
+                const active = settings.model === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => commit({ ...settings, model: m.value })}
+                    className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
+                      active
+                        ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className={`text-sm font-medium truncate ${active ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
+                        {m.label}
+                      </span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">{m.hint}</span>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-medium shrink-0 ${m.tierClass}`}>
+                      {m.tier}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <input
-              type="range"
-              min={0.1}
-              max={1.0}
-              step={0.1}
-              value={settings.temperature}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  temperature: Number(e.target.value),
-                })
-              }
-              onMouseUp={() => commit(settings)}
-              onTouchEnd={() => commit(settings)}
-              onKeyUp={() => commit(settings)}
-              className="w-full accent-blue-500"
-            />
-          </label>
+          </div>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Max tokens</span>
@@ -163,21 +180,6 @@ export default function ChatSettingsPanel({
                 commit({ ...settings, max_tokens: clamped });
               }}
               className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-              System prompt
-            </span>
-            <textarea
-              value={settings.system_prompt}
-              onChange={(e) =>
-                setSettings({ ...settings, system_prompt: e.target.value })
-              }
-              onBlur={() => commit(settings)}
-              rows={6}
-              className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y"
             />
           </label>
         </div>

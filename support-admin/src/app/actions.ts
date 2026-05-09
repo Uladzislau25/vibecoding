@@ -4,10 +4,8 @@ import { createSupabaseServer } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 
 export type ChatSettingsInput = {
-  model: "deepseek-chat" | "deepseek-reasoner";
-  temperature: number;
+  model: "deepseek-chat" | "deepseek-reasoner" | "deepseek-v3-0324" | "deepseek-r1-0528";
   max_tokens: number;
-  system_prompt: string;
 };
 
 export async function updateChatSettings(

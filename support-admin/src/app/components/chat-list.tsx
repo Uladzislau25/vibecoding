@@ -40,6 +40,12 @@ export default function ChatList({
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
     const supabase = getSupabaseBrowser();
 
     const channel = supabase
@@ -55,9 +61,21 @@ export default function ChatList({
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "clients" },
-        () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
           refreshTimer.current = setTimeout(() => router.refresh(), 300);
+
+          if (
+            payload.new?.escalation_status === "escalated" &&
+            typeof Notification !== "undefined" &&
+            Notification.permission === "granted"
+          ) {
+            new Notification("ChefBot — нужен менеджер 👨‍🍳", {
+              body: "Клиент ожидает помощи. Откройте вкладку Эскалация.",
+              icon: "/favicon.ico",
+            });
+          }
         }
       )
       .subscribe();

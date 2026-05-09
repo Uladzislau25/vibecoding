@@ -37,6 +37,8 @@ type Recipe = {
   created_at: string;
 };
 
+type RatingsMap = Record<number, { up: number; down: number }>;
+
 const EMPTY: RecipeInput = {
   title: "",
   description: "",
@@ -50,7 +52,15 @@ type FormState =
   | { mode: "create" }
   | { mode: "edit"; id: number };
 
-export default function RecipesList({ recipes, canEdit }: { recipes: Recipe[]; canEdit: boolean }) {
+export default function RecipesList({
+  recipes,
+  ratingsMap = {},
+  canEdit,
+}: {
+  recipes: Recipe[];
+  ratingsMap?: RatingsMap;
+  canEdit: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ mode: "closed" });
@@ -209,6 +219,7 @@ export default function RecipesList({ recipes, canEdit }: { recipes: Recipe[]; c
               <th className="text-left px-4 py-3 font-medium">Название</th>
               <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Ингредиенты</th>
               <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Создан</th>
+              <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Рейтинг</th>
               <th className="px-4 py-3 w-24"></th>
             </tr>
           </thead>
@@ -241,6 +252,24 @@ export default function RecipesList({ recipes, canEdit }: { recipes: Recipe[]; c
                     year: "numeric",
                   })}
                 </td>
+                <td className="px-4 py-3 align-top hidden sm:table-cell">
+                  {(() => {
+                    const rating = ratingsMap[r.id];
+                    if (!rating || (rating.up === 0 && rating.down === 0)) {
+                      return <span className="text-xs text-gray-300 dark:text-gray-600">—</span>;
+                    }
+                    return (
+                      <div className="flex items-center gap-2 text-xs">
+                        {rating.up > 0 && (
+                          <span className="text-green-600 dark:text-green-400 font-medium">👍 {rating.up}</span>
+                        )}
+                        {rating.down > 0 && (
+                          <span className="text-red-500 dark:text-red-400 font-medium">👎 {rating.down}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
                   {canEdit && (
                     <div className="flex items-center justify-end gap-1.5">
@@ -266,7 +295,7 @@ export default function RecipesList({ recipes, canEdit }: { recipes: Recipe[]; c
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center text-gray-400 dark:text-gray-500 text-sm">
+                <td colSpan={5} className="px-4 py-12 text-center text-gray-400 dark:text-gray-500 text-sm">
                   {recipes.length === 0 ? "Рецептов пока нет" : "Ничего не найдено"}
                 </td>
               </tr>

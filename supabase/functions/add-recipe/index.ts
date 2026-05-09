@@ -90,6 +90,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError || !inserted) {
+      if (insertError?.code === "23505") {
+        return jsonResponse({ error: "Рецепт с таким названием уже существует" }, 409);
+      }
       console.error("Failed to insert recipe:", insertError);
       return jsonResponse({ error: "Failed to save recipe" }, 500);
     }

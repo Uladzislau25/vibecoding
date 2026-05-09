@@ -27,10 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 const DEFAULT_SETTINGS: ChatSettingsInput = {
   model: "deepseek-chat",
-  temperature: 0.8,
   max_tokens: 10000,
-  system_prompt:
-    "Ты Шеф - дружелюбный кулинарный помощник. Отвечай только на кулинарные темы, давай рецепты в формате: Наазвание, Ингредиенты, Пошаговые инструкции, Время приготовления. Учитывай сезонность и предлагай замены аллергенам. Считай каллоррии, белки, жиры, углеводы.",
 };
 
 export default async function ChatPage({
@@ -53,7 +50,7 @@ export default async function ChatPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("chat_settings")
-        .select("model, temperature, max_tokens, system_prompt")
+        .select("model, max_tokens")
         .eq("client_id", clientId)
         .maybeSingle(),
       supabase
@@ -115,9 +112,7 @@ export default async function ChatPage({
     model:
       (settingsRow?.model as ChatSettingsInput["model"]) ??
       DEFAULT_SETTINGS.model,
-    temperature: settingsRow?.temperature ?? DEFAULT_SETTINGS.temperature,
     max_tokens: settingsRow?.max_tokens ?? DEFAULT_SETTINGS.max_tokens,
-    system_prompt: settingsRow?.system_prompt ?? DEFAULT_SETTINGS.system_prompt,
   };
   const initialStatus: "open" | "closed" =
     client.status === "closed" ? "closed" : "open";
