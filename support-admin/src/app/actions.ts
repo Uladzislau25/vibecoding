@@ -89,6 +89,18 @@ export async function assignManager(clientId: number, managerId: number | null) 
         action: "unassigned",
       });
     }
+
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("escalation_status")
+      .eq("id", clientId)
+      .single();
+    if (clientRow && clientRow.escalation_status !== "normal") {
+      await supabase
+        .from("clients")
+        .update({ escalation_status: "normal" })
+        .eq("id", clientId);
+    }
   } else {
     const { error } = await supabase
       .from("client_assignments")
@@ -112,4 +124,23 @@ export async function assignManager(clientId: number, managerId: number | null) 
 
   revalidatePath("/");
   revalidatePath("/history");
+  revalidatePath(`/chat/${clientId}`);
+}
+
+export async function returnToBot(clientId: number) {
+  const supabase = await createSupabaseServer();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Не авторизован");
+
+  const { error } = await supabase
+    .from("clients")
+    .update({ escalation_status: "normal" })
+    .eq("id", clientId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/");
+  revalidatePath(`/chat/${clientId}`);
 }

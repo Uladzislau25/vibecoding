@@ -15,6 +15,8 @@ export type Chat = {
   currentManagerId: number | null;
   status: string | null;
   escalationStatus: string | null;
+  escalatedAt: string | null;
+  unreadCount: number;
 };
 
 type Filter = "all" | "unassigned" | "open" | "closed" | "escalated";
@@ -162,6 +164,8 @@ export default function ChatList({
             currentManagerId={chat.currentManagerId}
             status={chat.status}
             escalationStatus={chat.escalationStatus}
+            escalatedAt={chat.escalatedAt}
+            unreadCount={chat.unreadCount}
           />
         ))}
 

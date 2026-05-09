@@ -3,6 +3,14 @@
 import { useState, useTransition } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
+const QUICK_REPLIES = [
+  "Добрый день! Чем могу помочь?",
+  "Одну минуту, смотрю ваш вопрос.",
+  "Понял вас, сейчас помогу.",
+  "Передаю информацию специалисту.",
+  "Есть ли ещё вопросы?",
+];
+
 type Props = {
   clientId: number;
   managerId: number;
@@ -12,6 +20,7 @@ export default function ReplyForm({ clientId, managerId }: Props) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [showTemplates, setShowTemplates] = useState(false);
 
   function send() {
     const trimmed = text.trim();
@@ -39,6 +48,29 @@ export default function ReplyForm({ clientId, managerId }: Props) {
       }}
       className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm p-2 flex flex-col gap-1"
     >
+      <div className="px-1 pt-1 flex flex-col gap-1.5">
+        <button
+          type="button"
+          onClick={() => setShowTemplates((v) => !v)}
+          className="self-start text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        >
+          {showTemplates ? "Скрыть шаблоны ↑" : "Шаблоны ↓"}
+        </button>
+        {showTemplates && (
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_REPLIES.map((tpl) => (
+              <button
+                key={tpl}
+                type="button"
+                onClick={() => setText(tpl)}
+                className="text-xs px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                {tpl}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex gap-2 items-end">
         <textarea
           value={text}

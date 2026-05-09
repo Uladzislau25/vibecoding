@@ -15,6 +15,8 @@ export default function ChatCard({
   currentManagerId,
   status,
   escalationStatus,
+  escalatedAt,
+  unreadCount,
 }: {
   clientId: number;
   display: string;
@@ -24,9 +26,16 @@ export default function ChatCard({
   currentManagerId: number | null;
   status?: string | null;
   escalationStatus?: string | null;
+  escalatedAt?: string | null;
+  unreadCount?: number;
 }) {
   const [selected, setSelected] = useState(currentManagerId?.toString() ?? "");
   const [isPending, startTransition] = useTransition();
+
+  const waitMinutes =
+    escalationStatus === "escalated" && escalatedAt
+      ? Math.floor((Date.now() - new Date(escalatedAt).getTime()) / 60000)
+      : null;
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     e.preventDefault();
@@ -70,7 +79,7 @@ export default function ChatCard({
               </p>
               {escalationStatus === "escalated" && (
                 <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 font-medium border border-red-200 dark:border-red-800">
-                  ждёт менеджера
+                  ждёт менеджера{waitMinutes !== null && waitMinutes > 0 ? ` ${waitMinutes} мин` : ""}
                 </span>
               )}
               {escalationStatus === "manager_active" && (
@@ -84,9 +93,16 @@ export default function ChatCard({
                 </span>
               )}
             </div>
-            <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
-              {time}
-            </time>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!!unreadCount && unreadCount > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+                  {unreadCount}
+                </span>
+              )}
+              <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                {time}
+              </time>
+            </div>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
             {lastMessageText}

@@ -96,6 +96,7 @@ export type Database = {
         Row: {
           chat_id: number
           created_at: string | null
+          escalated_at: string | null
           escalation_status: string
           first_name: string | null
           id: number
@@ -107,6 +108,7 @@ export type Database = {
         Insert: {
           chat_id: number
           created_at?: string | null
+          escalated_at?: string | null
           escalation_status?: string
           first_name?: string | null
           id?: never
@@ -118,6 +120,7 @@ export type Database = {
         Update: {
           chat_id?: number
           created_at?: string | null
+          escalated_at?: string | null
           escalation_status?: string
           first_name?: string | null
           id?: never

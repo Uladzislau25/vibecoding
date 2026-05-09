@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import ChatSettingsPanel from "@/app/components/chat-settings-panel";
 import MessagesList from "./messages-list";
 import ReplyForm from "./reply-form";
+import ChatAssignBar from "./chat-assign-bar";
+import ReturnToBotButton from "./return-to-bot-button";
 import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function ChatPage({
   const { id } = await params;
   const clientId = Number(id);
 
-  const [clientRes, messagesRes, settingsRes, assignmentRes] =
+  const [clientRes, messagesRes, settingsRes, assignmentRes, allManagersRes] =
     await Promise.all([
       supabase.from("clients").select("*").eq("id", clientId).single(),
       supabase
@@ -58,6 +60,7 @@ export default async function ChatPage({
         .select("assigned_manager_id")
         .eq("client_id", clientId)
         .maybeSingle(),
+      supabase.from("managers").select("id, name, position").order("name"),
     ]);
 
   if (clientRes.error || !clientRes.data) return notFound();
@@ -99,9 +102,13 @@ export default async function ChatPage({
         .maybeSingle()
     : { data: null };
 
+  const allManagers = (allManagersRes.data ?? []) as { id: number; name: string; position: string }[];
   const assignedManagerId = assignmentRes.data?.assigned_manager_id ?? null;
   const isAssigned =
     !!currentManager && currentManager.id === assignedManagerId;
+  const showReturnToBot =
+    client.escalation_status === "escalated" ||
+    client.escalation_status === "manager_active";
 
   if (currentManager && !managerNames[currentManager.id]) {
     managerNames[currentManager.id] = currentManager.name;
@@ -170,6 +177,19 @@ export default async function ChatPage({
           initialSettings={initialSettings}
           initialStatus={initialStatus}
         />
+
+        <ChatAssignBar
+          clientId={clientId}
+          managers={allManagers}
+          currentManagerId={assignedManagerId}
+          currentUserId={currentManager?.id ?? null}
+        />
+
+        {showReturnToBot && (
+          <div className="flex justify-end">
+            <ReturnToBotButton clientId={clientId} />
+          </div>
+        )}
 
         {isAssigned && currentManager ? (
           <ReplyForm clientId={clientId} managerId={currentManager.id} />

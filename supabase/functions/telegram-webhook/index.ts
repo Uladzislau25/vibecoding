@@ -403,7 +403,10 @@ async function processRecipeRequest(
   await saveBotReply(clientId, reply, replyRecipeId, usage);
 
   if (escalated) {
-    await db.from("clients").update({ escalation_status: "escalated" }).eq("id", clientId);
+    await db
+      .from("clients")
+      .update({ escalation_status: "escalated", escalated_at: new Date().toISOString() })
+      .eq("id", clientId);
   }
 }
 
@@ -596,6 +599,16 @@ Deno.serve(async (req) => {
     if (clientError || !client) {
       console.error("Failed to upsert client:", clientError);
       return new Response("OK", { status: 200 });
+    }
+
+    // Reopen closed chat when client writes again
+    const { data: clientFull } = await db
+      .from("clients")
+      .select("status")
+      .eq("id", client.id)
+      .single();
+    if (clientFull?.status === "closed") {
+      await db.from("clients").update({ status: "open" }).eq("id", client.id);
     }
 
     // Save user message (idempotency via telegram_message_id)

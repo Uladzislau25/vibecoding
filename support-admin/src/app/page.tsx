@@ -15,9 +15,7 @@ export default async function Home() {
   const [clientsRes, managersRes] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, chat_id, username, first_name, last_name, status, escalation_status, messages(id, text, created_at), client_assignments(assigned_manager_id)")
-      .order("created_at", { referencedTable: "messages", ascending: false })
-      .limit(1, { referencedTable: "messages" }),
+      .select("id, chat_id, username, first_name, last_name, status, escalation_status, escalated_at, messages(id, text, created_at, sender_type), client_assignments(assigned_manager_id)"),
     supabase.from("managers").select("id, name, position").order("name"),
   ]);
 
@@ -33,31 +31,52 @@ export default async function Home() {
   const chats = (clientsRes.data ?? [])
     .filter((c) => c.messages.length > 0)
     .sort((a, b) => {
-      // Escalated chats float to top
       const ea = a.escalation_status === "escalated" ? 2 : a.escalation_status === "manager_active" ? 1 : 0;
       const eb = b.escalation_status === "escalated" ? 2 : b.escalation_status === "manager_active" ? 1 : 0;
       if (ea !== eb) return eb - ea;
-      const ta = new Date(a.messages[0].created_at).getTime();
-      const tb = new Date(b.messages[0].created_at).getTime();
+      const msgs_a = a.messages.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
+      const msgs_b = b.messages.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
+      const ta = new Date(msgs_a[0].created_at).getTime();
+      const tb = new Date(msgs_b[0].created_at).getTime();
       return tb - ta;
     })
-    .map((c) => ({
-      id: c.id,
-      display:
-        [c.first_name, c.last_name].filter(Boolean).join(" ") ||
-        c.username ||
-        `User ${c.chat_id ?? c.id}`,
-      lastMessageText: c.messages[0].text,
-      time: new Date(c.messages[0].created_at).toLocaleString("ru-RU", {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      currentManagerId: c.client_assignments?.assigned_manager_id ?? null,
-      status: c.status ?? null,
-      escalationStatus: c.escalation_status ?? "normal",
-    }));
+    .map((c) => {
+      const msgs = [...c.messages].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      const lastNonClient = msgs.filter((m) => m.sender_type !== "client").at(-1);
+      const unreadCount = lastNonClient
+        ? msgs.filter(
+            (m) =>
+              m.sender_type === "client" &&
+              new Date(m.created_at).getTime() > new Date(lastNonClient.created_at).getTime(),
+          ).length
+        : msgs.filter((m) => m.sender_type === "client").length;
+
+      const sorted = msgs.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+
+      return {
+        id: c.id,
+        display:
+          [c.first_name, c.last_name].filter(Boolean).join(" ") ||
+          c.username ||
+          `User ${c.chat_id ?? c.id}`,
+        lastMessageText: sorted[0].text,
+        time: new Date(sorted[0].created_at).toLocaleString("ru-RU", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        currentManagerId: c.client_assignments?.assigned_manager_id ?? null,
+        status: c.status ?? null,
+        escalationStatus: c.escalation_status ?? "normal",
+        escalatedAt: c.escalated_at ?? null,
+        unreadCount,
+      };
+    });
 
   return <ChatList chats={chats} managers={managers} />;
 }
