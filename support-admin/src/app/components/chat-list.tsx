@@ -68,15 +68,25 @@ export default function ChatList({
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
           refreshTimer.current = setTimeout(() => router.refresh(), 300);
 
-          if (
-            payload.new?.escalation_status === "escalated" &&
-            typeof Notification !== "undefined" &&
-            Notification.permission === "granted"
-          ) {
-            new Notification("ChefBot — нужен менеджер 👨‍🍳", {
-              body: "Клиент ожидает помощи. Откройте вкладку Эскалация.",
-              icon: "/favicon.ico",
-            });
+          if (payload.new?.escalation_status === "escalated") {
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              new Notification("ChefBot — нужен менеджер 👨‍🍳", {
+                body: "Клиент ожидает помощи. Откройте вкладку Эскалация.",
+                icon: "/favicon.ico",
+              });
+            }
+            try {
+              const ctx = new AudioContext();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.frequency.value = 880;
+              gain.gain.setValueAtTime(0.25, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+              osc.start(ctx.currentTime);
+              osc.stop(ctx.currentTime + 0.6);
+            } catch {}
           }
         }
       )

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
-export type SenderType = "client" | "manager" | "bot";
+export type SenderType = "client" | "manager" | "bot" | "note";
 
 export type ChatMessage = {
   id: number;
@@ -98,12 +98,35 @@ export default function MessagesList({
 
         const isClient = msg.sender_type === "client";
         const isBot = msg.sender_type === "bot";
+        const isNote = msg.sender_type === "note";
 
         const sender = isClient
           ? clientName
           : isBot
             ? "Шеф-бот"
-            : (msg.manager_id && managerNames[msg.manager_id]) || "Менеджер";
+            : isNote
+              ? "📝 Заметка"
+              : (msg.manager_id && managerNames[msg.manager_id]) || "Менеджер";
+
+        if (isNote) {
+          return (
+            <div key={msg.id} className="flex justify-center">
+              <div className="max-w-[85%] rounded-xl px-4 py-2.5 border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                    {(msg.manager_id && managerNames[msg.manager_id]) || "Менеджер"} · Заметка
+                  </span>
+                  <time className="text-[10px] text-amber-400/80 dark:text-amber-500/80 whitespace-nowrap">
+                    {time}
+                  </time>
+                </div>
+                <p className="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-200 whitespace-pre-wrap italic">
+                  {msg.text}
+                </p>
+              </div>
+            </div>
+          );
+        }
 
         const align = isClient ? "items-start" : "items-end";
         const bubble = isClient

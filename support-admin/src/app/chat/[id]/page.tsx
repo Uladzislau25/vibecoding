@@ -8,6 +8,7 @@ import ReplyForm from "./reply-form";
 import ChatAssignBar from "./chat-assign-bar";
 import ReturnToBotButton from "./return-to-bot-button";
 import RecipePicker from "./recipe-picker";
+import ClientTags from "./client-tags";
 import type { ChatSettingsInput } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -41,14 +42,12 @@ export default async function ChatPage({
   const { id } = await params;
   const clientId = Number(id);
 
-  const [clientRes, messagesRes, settingsRes, assignmentRes, allManagersRes] =
+  const [clientRes, messagesRes, settingsRes, assignmentRes, allManagersRes, sentRecipesRes] =
     await Promise.all([
       supabase.from("clients").select("*").eq("id", clientId).single(),
       supabase
         .from("messages")
-        .select(
-          "id, text, created_at, sender_type, manager_id, total_tokens",
-        )
+        .select("id, text, created_at, sender_type, manager_id, total_tokens")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false }),
       supabase
@@ -62,6 +61,13 @@ export default async function ChatPage({
         .eq("client_id", clientId)
         .maybeSingle(),
       supabase.from("managers").select("id, name, position").order("name"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("messages")
+        .select("recipe_id, created_at, recipes(title)")
+        .eq("client_id", clientId)
+        .not("recipe_id", "is", null)
+        .order("created_at", { ascending: false }),
     ]);
 
   if (clientRes.error || !clientRes.data) return notFound();
@@ -71,7 +77,7 @@ export default async function ChatPage({
     id: m.id,
     text: m.text,
     created_at: m.created_at,
-    sender_type: (m.sender_type as "client" | "manager" | "bot") ?? "client",
+    sender_type: (m.sender_type as "client" | "manager" | "bot" | "note") ?? "client",
     manager_id: m.manager_id,
     total_tokens: m.total_tokens,
   }));
@@ -105,8 +111,7 @@ export default async function ChatPage({
 
   const allManagers = (allManagersRes.data ?? []) as { id: number; name: string; position: string }[];
   const assignedManagerId = assignmentRes.data?.assigned_manager_id ?? null;
-  const isAssigned =
-    !!currentManager && currentManager.id === assignedManagerId;
+  const isAssigned = !!currentManager && currentManager.id === assignedManagerId;
   const showReturnToBot =
     client.escalation_status === "escalated" ||
     client.escalation_status === "manager_active";
@@ -128,6 +133,20 @@ export default async function ChatPage({
     [client.first_name, client.last_name].filter(Boolean).join(" ") ||
     client.username ||
     `User ${client.chat_id ?? client.id}`;
+
+  type SentRecipe = { recipe_id: number; title: string; sent_at: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sentRecipes: SentRecipe[] = ((sentRecipesRes as any).data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((r: any) => r.recipe_id != null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((r: any) => ({
+      recipe_id: r.recipe_id as number,
+      title: (r.recipes as { title?: string } | null)?.title ?? "Рецепт",
+      sent_at: r.created_at as string,
+    }));
+
+  const clientTags: string[] = (client as Record<string, unknown>).tags as string[] ?? [];
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] dark:bg-gray-950">
@@ -152,23 +171,37 @@ export default async function ChatPage({
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </Link>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
             {display[0].toUpperCase()}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{display}</p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {client.username ? `@${client.username}` : `Chat ID: ${client.chat_id}`}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
-              Токены
-            </p>
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
-              {totalTokens.toLocaleString("ru-RU")}
-            </p>
+          <div className="flex items-center gap-3 shrink-0">
+            <a
+              href={`/api/export/${clientId}`}
+              className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Скачать историю чата"
+            >
+              ↓ CSV
+            </a>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                Токены
+              </p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
+                {totalTokens.toLocaleString("ru-RU")}
+              </p>
+            </div>
           </div>
+        </div>
+
+        {/* Tags */}
+        <div className="mt-3">
+          <ClientTags clientId={clientId} initialTags={clientTags} />
         </div>
       </div>
 
@@ -205,6 +238,25 @@ export default async function ChatPage({
               ? "Ответить может только назначенный менеджер"
               : "Назначьте менеджера, чтобы ответить клиенту"}
           </div>
+        )}
+
+        {/* Sent recipes history */}
+        {sentRecipes.length > 0 && (
+          <details className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm overflow-hidden">
+            <summary className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none flex items-center justify-between">
+              <span>📖 Отправленные рецепты ({sentRecipes.length})</span>
+            </summary>
+            <div className="divide-y divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
+              {sentRecipes.map((r, i) => (
+                <div key={`${r.recipe_id}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-800 dark:text-gray-200 truncate">{r.title}</span>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 shrink-0">
+                    {new Date(r.sent_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
 
         <MessagesList

@@ -139,6 +139,46 @@ export async function assignManager(clientId: number, managerId: number | null) 
   revalidatePath(`/chat/${clientId}`);
 }
 
+export async function addNote(
+  clientId: number,
+  managerId: number,
+  text: string,
+) {
+  const supabase = await createSupabaseServer();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Не авторизован");
+
+  const { error } = await supabase.from("messages").insert({
+    client_id: clientId,
+    manager_id: managerId,
+    text,
+    sender_type: "note",
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/chat/${clientId}`);
+}
+
+export async function updateClientTags(clientId: number, tags: string[]) {
+  const supabase = await createSupabaseServer();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Не авторизован");
+
+  const { error } = await supabase
+    .from("clients")
+    .update({ tags } as Record<string, unknown>)
+    .eq("id", clientId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/chat/${clientId}`);
+}
+
 export async function returnToBot(clientId: number) {
   const supabase = await createSupabaseServer();
 

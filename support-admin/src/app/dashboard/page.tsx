@@ -5,6 +5,7 @@ export const metadata = { title: "Дашборд" };
 
 export default async function DashboardPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   // Run all queries in parallel
   const [
@@ -13,6 +14,7 @@ export default async function DashboardPage() {
     totalClientsResult,
     activeClientsResult,
     totalRecipesResult,
+    managerStatsResult,
   ] = await Promise.all([
     // Messages per day for last 7 days
     supabase
@@ -39,6 +41,13 @@ export default async function DashboardPage() {
 
     // Total recipes
     supabase.from("recipes").select("id", { count: "exact", head: true }),
+
+    // Manager activity last 30 days
+    supabase
+      .from("messages")
+      .select("manager_id, client_id, managers(name)")
+      .eq("sender_type", "manager")
+      .gte("created_at", thirtyDaysAgo),
   ]);
 
   // Build messages-per-day map
@@ -70,6 +79,22 @@ export default async function DashboardPage() {
   const topRecipes = Object.entries(recipeScores)
     .sort(([, a], [, b]) => b.net - a.net)
     .slice(0, 5);
+
+  // Manager stats aggregation
+  type MgrRow = { manager_id: number | null; client_id: number; managers: { name: string } | null };
+  const mgrRows = (managerStatsResult.data ?? []) as MgrRow[];
+  const mgrMap: Record<number, { name: string; messages: number; chats: Set<number> }> = {};
+  for (const r of mgrRows) {
+    if (!r.manager_id) continue;
+    if (!mgrMap[r.manager_id]) {
+      mgrMap[r.manager_id] = { name: r.managers?.name ?? "Менеджер", messages: 0, chats: new Set() };
+    }
+    mgrMap[r.manager_id].messages++;
+    mgrMap[r.manager_id].chats.add(r.client_id);
+  }
+  const managerStats = Object.values(mgrMap)
+    .map((m) => ({ name: m.name, messages: m.messages, chats: m.chats.size }))
+    .sort((a, b) => b.messages - a.messages);
 
   const totalClients = totalClientsResult.count ?? 0;
   const activeClients = activeClientsResult.count ?? 0;
@@ -169,6 +194,33 @@ export default async function DashboardPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Manager stats */}
+        {managerStats.length > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Активность менеджеров за 30 дней</p>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-5 py-2.5 font-medium">Менеджер</th>
+                  <th className="text-right px-5 py-2.5 font-medium">Сообщений</th>
+                  <th className="text-right px-5 py-2.5 font-medium">Чатов</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {managerStats.map((m) => (
+                  <tr key={m.name}>
+                    <td className="px-5 py-3 text-gray-900 dark:text-gray-100 font-medium">{m.name}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">{m.messages.toLocaleString("ru-RU")}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">{m.chats}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
