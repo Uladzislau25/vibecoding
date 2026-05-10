@@ -18,10 +18,8 @@ type ModelMeta = {
 };
 
 const MODELS: ModelMeta[] = [
-  { value: "deepseek-chat", label: "deepseek-chat", tier: "Базовая", tierClass: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", hint: "Быстрее всего, подходит для большинства задач" },
-  { value: "deepseek-v3-0324", label: "deepseek-v3-0324", tier: "Мощная", tierClass: "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", hint: "Сильная общая модель, лучше понимает контекст" },
-  { value: "deepseek-reasoner", label: "deepseek-reasoner", tier: "Думает", tierClass: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400", hint: "Рассуждает пошагово, точнее в сложных вопросах" },
-  { value: "deepseek-r1-0528", label: "deepseek-r1-0528", tier: "Топ", tierClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", hint: "Самая мощная, медленнее" },
+  { value: "deepseek-v4-flash", label: "deepseek-v4-flash", tier: "Базовая", tierClass: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", hint: "Быстрее всего, подходит для большинства задач" },
+  { value: "deepseek-v4-pro", label: "deepseek-v4-pro", tier: "Топ", tierClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", hint: "Самая мощная, рассуждает пошагово" },
 ];
 
 export default function ChatSettingsPanel({ clientId, initialSettings, initialStatus }: Props) {

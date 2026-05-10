@@ -18,7 +18,7 @@ import type { ClientSettings, ConversationMessage } from "../_shared/types/index
 const RATE_LIMIT_PER_HOUR = 20;
 
 const DEFAULT_CHAT_SETTINGS = {
-  model: "deepseek-chat",
+  model: "deepseek-v4-flash",
   temperature: 0.8,
   max_tokens: 10000,
   system_prompt:

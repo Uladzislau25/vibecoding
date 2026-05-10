@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 const DEFAULT_SETTINGS: ChatSettingsInput = {
-  model: "deepseek-chat",
+  model: "deepseek-v4-flash",
   max_tokens: 10000,
 };
 

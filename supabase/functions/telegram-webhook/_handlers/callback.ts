@@ -4,7 +4,7 @@ import { processRecipeRequest } from "../_lib/recipe-flow.ts";
 import type { ClientSettings } from "../../_shared/types/index.ts";
 
 const DEFAULT_CHAT_SETTINGS = {
-  model: "deepseek-chat",
+  model: "deepseek-v4-flash",
   temperature: 0.8,
   max_tokens: 10000,
   system_prompt:
