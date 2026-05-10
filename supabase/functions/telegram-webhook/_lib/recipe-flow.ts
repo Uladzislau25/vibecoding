@@ -87,36 +87,23 @@ export async function processRecipeRequest(
           .join("\n\n");
         const passageEmbedding = await createEmbedding(passageInput, "passage");
 
-        const { data: newRecipe, error: insertError } = await db
-          .from("recipes")
-          .insert({
-            title: generated.title,
-            category: generated.category || null,
-            description: generated.reply_text,
-            ingredients: generated.ingredients,
-            instructions: generated.instructions,
-            embedding: JSON.stringify(passageEmbedding),
+        const { data: dedup, error: dedupError } = await db
+          .rpc("insert_recipe_dedup", {
+            p_title: generated.title,
+            p_description: generated.reply_text,
+            p_ingredients: generated.ingredients,
+            p_instructions: generated.instructions,
+            p_category: generated.category || null,
+            p_embedding: JSON.stringify(passageEmbedding),
           })
-          .select("id")
           .single();
 
-        if (insertError) {
-          if (insertError.code === "23505") {
-            const { data: existing } = await db
-              .from("recipes")
-              .select("id, description")
-              .ilike("title", generated.title.trim())
-              .limit(1)
-              .maybeSingle();
-            reply = existing?.description ?? generated.reply_text;
-            replyRecipeId = existing?.id ?? null;
-          } else {
-            console.error("Failed to save recipe:", insertError);
-            reply = generated.reply_text;
-          }
-        } else {
+        if (dedupError || !dedup) {
+          console.error("Failed to save recipe:", dedupError);
           reply = generated.reply_text;
-          replyRecipeId = newRecipe?.id ?? null;
+        } else {
+          reply = dedup.description ?? generated.reply_text;
+          replyRecipeId = dedup.recipe_id ?? null;
         }
       }
     }
