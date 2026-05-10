@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { supabase as serviceClient } from "@/lib/supabase";
+import { supabase as serviceClient } from "@/shared/api/supabase-anon";
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.clone();

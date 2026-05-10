@@ -1,4 +1,4 @@
-import { updatePassword } from "./actions";
+import { updatePassword } from "@/features/auth/api/actions";
 
 export default async function ResetPasswordPage({
   searchParams,

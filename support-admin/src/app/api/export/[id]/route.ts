@@ -1,4 +1,4 @@
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseServer } from "@/shared/api/supabase-server";
 import { NextRequest } from "next/server";
 
 export async function GET(

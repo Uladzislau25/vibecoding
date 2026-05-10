@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { resetPassword } from "./actions";
-import RefreshOnFocus from "./refresh-on-focus";
+import { resetPassword } from "@/features/auth/api/actions";
+import RefreshOnFocus from "@/features/auth/ui/refresh-on-focus";
 
 export default async function ForgotPasswordPage({
   searchParams,

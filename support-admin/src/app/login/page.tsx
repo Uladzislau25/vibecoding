@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { login } from "./actions";
-import GoogleOAuthButton from "./google-oauth-button";
+import { login } from "@/features/auth/api/actions";
+import GoogleOAuthButton from "@/features/auth/ui/google-oauth-button";
 
 export const metadata: Metadata = { title: "Вход" };
 

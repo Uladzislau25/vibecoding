@@ -1,7 +1,7 @@
-import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
+import { supabase } from "@/shared/api/supabase-anon";
+import { getUserRole } from "@/shared/lib/auth";
 import { notFound } from "next/navigation";
-import UsersManager from "./users-manager";
+import UsersManager from "@/features/user-management/ui/UsersManager";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Пользователи" };

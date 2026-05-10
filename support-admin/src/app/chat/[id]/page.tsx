@@ -1,15 +1,15 @@
-import { supabase } from "@/lib/supabase";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { supabase } from "@/shared/api/supabase-anon";
+import { createSupabaseServer } from "@/shared/api/supabase-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ChatSettingsPanel from "@/app/components/chat-settings-panel";
-import MessagesList from "./messages-list";
-import ReplyForm from "./reply-form";
-import ChatAssignBar from "./chat-assign-bar";
-import ReturnToBotButton from "./return-to-bot-button";
-import RecipePicker from "./recipe-picker";
-import ClientTags from "./client-tags";
-import type { ChatSettingsInput } from "@/app/actions";
+import ChatSettingsPanel from "@/features/chat-settings/ui/ChatSettingsPanel";
+import MessagesList from "@/widgets/messages-list/ui/MessagesList";
+import ReplyForm from "@/features/chat-reply/ui/ReplyForm";
+import ChatAssignBar from "@/features/assign-manager/ui/ChatAssignBar";
+import ReturnToBotButton from "@/features/escalation/ui/ReturnToBotButton";
+import RecipePicker from "@/features/recipe-picker/ui/RecipePicker";
+import ClientTags from "@/features/client-tags/ui/ClientTags";
+import type { ChatSettingsInput } from "@/features/chat-settings/api/actions";
 
 export const dynamic = "force-dynamic";
 

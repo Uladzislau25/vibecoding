@@ -1,7 +1,7 @@
-import { supabase } from "@/lib/supabase";
-import { createSupabaseServer } from "@/lib/supabase-server";
-import ChatList from "@/app/components/chat-list";
-import Landing from "@/app/components/landing";
+import { supabase } from "@/shared/api/supabase-anon";
+import { createSupabaseServer } from "@/shared/api/supabase-server";
+import ChatList from "@/widgets/chat-list/ui/ChatList";
+import Landing from "@/shared/ui/landing";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Сообщения" };
@@ -34,8 +34,10 @@ export default async function Home() {
       const ea = a.escalation_status === "escalated" ? 2 : a.escalation_status === "manager_active" ? 1 : 0;
       const eb = b.escalation_status === "escalated" ? 2 : b.escalation_status === "manager_active" ? 1 : 0;
       if (ea !== eb) return eb - ea;
-      const msgs_a = a.messages.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
-      const msgs_b = b.messages.sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msgs_a = a.messages.sort((x: any, y: any) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msgs_b = b.messages.sort((x: any, y: any) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
       const ta = new Date(msgs_a[0].created_at).getTime();
       const tb = new Date(msgs_b[0].created_at).getTime();
       return tb - ta;

@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/shared/api/supabase-anon";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "История" };

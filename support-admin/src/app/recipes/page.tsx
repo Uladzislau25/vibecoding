@@ -1,6 +1,6 @@
-import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
-import RecipesList from "./recipes-list";
+import { supabase } from "@/shared/api/supabase-anon";
+import { getUserRole } from "@/shared/lib/auth";
+import RecipesList from "@/widgets/recipe-list/ui/RecipesList";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Рецепты" };

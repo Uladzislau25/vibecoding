@@ -1,0 +1,67 @@
+"use client";
+
+import Link from "next/link";
+import { useTransition, useState } from "react";
+import { assignManager } from "@/features/assign-manager/api/actions";
+
+type Manager = { id: number; name: string; position: string };
+
+export default function ChatCard({ clientId, display, lastMessageText, time, managers, currentManagerId, status, escalationStatus, escalatedAt, unreadCount }: {
+  clientId: number; display: string; lastMessageText: string; time: string;
+  managers: Manager[]; currentManagerId: number | null;
+  status?: string | null; escalationStatus?: string | null; escalatedAt?: string | null; unreadCount?: number;
+}) {
+  const [selected, setSelected] = useState(currentManagerId?.toString() ?? "");
+  const [isPending, startTransition] = useTransition();
+
+  const waitMinutes = escalationStatus === "escalated" && escalatedAt
+    ? Math.floor((Date.now() - new Date(escalatedAt).getTime()) / 60000) : null;
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    e.stopPropagation();
+    const value = e.target.value;
+    setSelected(value);
+    startTransition(async () => { await assignManager(clientId, value ? Number(value) : null); });
+  }
+
+  const borderClass = escalationStatus === "escalated"
+    ? "border-red-400 dark:border-red-600 bg-red-50/60 dark:bg-red-950/20"
+    : escalationStatus === "manager_active"
+      ? "border-amber-400 dark:border-amber-500 bg-amber-50/60 dark:bg-amber-950/20"
+      : "border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900";
+
+  return (
+    <div className={`flex items-center gap-4 rounded-2xl border px-5 py-4 shadow-sm hover:brightness-95 transition-all ${borderClass}`}>
+      <Link href={`/chat/${clientId}`} className="flex items-center gap-4 flex-1 min-w-0">
+        <div className="relative shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
+            {display[0].toUpperCase()}
+          </div>
+          {escalationStatus === "escalated" && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white dark:border-gray-900" />}
+          {escalationStatus === "manager_active" && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white dark:border-gray-900" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{display}</p>
+              {escalationStatus === "escalated" && <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 font-medium border border-red-200 dark:border-red-800">ждёт менеджера{waitMinutes !== null && waitMinutes > 0 ? ` ${waitMinutes} мин` : ""}</span>}
+              {escalationStatus === "manager_active" && <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-medium border border-amber-200 dark:border-amber-800">в работе</span>}
+              {status === "closed" && escalationStatus === "normal" && <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 font-medium">закрыт</span>}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!!unreadCount && unreadCount > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">{unreadCount}</span>}
+              <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{time}</time>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{lastMessageText}</p>
+        </div>
+      </Link>
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <select value={selected} onChange={handleChange} disabled={isPending} className="text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-gray-700 dark:text-gray-300 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors disabled:opacity-50 max-w-[120px]">
+          <option value="">—</option>
+          {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
