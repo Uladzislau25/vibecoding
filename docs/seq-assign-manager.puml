@@ -1,59 +1,92 @@
-@startuml
+@startuml Seq-AssignManager
+title ChefBot — Назначение менеджера и ответ клиенту в эскалации
 
-skinparam titleFontSize 18
-skinparam sequenceArrowThickness 2
-skinparam sequenceParticipantFontSize 13
-skinparam sequenceMessageFontSize 12
+actor "Менеджер" as Mgr
+participant "support-admin\n(Next.js)" as App
+participant "Server Action\nassignManager()" as SA
+participant "Supabase Auth" as Auth
+database "Supabase Postgres\n(RLS authenticated)" as DB
+participant "Supabase Realtime" as RT
+participant "admin-reply\n(Edge Function)" as Reply
+participant "Telegram Bot API" as TG
+actor "Клиент" as Client
 
-title Assign / Unassign Manager
+== 1. Менеджер открывает эскалированный чат ==
+Mgr -> App: GET /chat/[id]
+App -> Auth: getUser()
+Auth --> App: user
+App -> DB: select clients, messages, managers, assignment\n(RLS: get_my_role() in admin|manager)
+DB --> App: данные чата
+App --> Mgr: UI чата (escalation_status='escalated')
 
-actor "Manager" as manager
-participant "UI" as ui
-participant "Backend" as api
-database "managers" as db_managers
-database "client_assignments" as db_ca
+== 2. Назначение менеджера на клиента ==
+Mgr -> App: ChatAssignBar → выбрать менеджера
+App -> SA: assignManager(clientId, managerId)
+SA -> Auth: getUser() — проверка авторизации
+SA -> DB: select managers where user_id = auth.uid()
+DB --> SA: currentManager
+SA -> DB: upsert client_assignments\n  (client_id, assigned_manager_id,\n   assigned_by_manager_id, updated_at)
+SA -> DB: insert messages_managers\n  (action='assigned')
+SA -> SA: revalidatePath('/', '/history', '/chat/[id]')
 
-== Assign себя ==
+RT -> App: realtime client_assignments
+App --> Mgr: обновлённый UI
 
-manager -> ui : Нажимает "Assign me"
-ui -> api : POST /assign { client_id, manager_id }
-api -> db_managers : SELECT manager by id
-db_managers --> api : manager found
+== 3. Менеджер отправляет ответ клиенту ==
+Mgr -> App: ReplyForm.submit(text | recipeId)
+App -> Reply: POST /admin-reply\nAuthorization: Bearer <session JWT>\nbody: { chatId, managerId, message | recipeId }
 
-alt client_assignment существует
-  api -> db_ca : UPDATE SET\nassigned_manager_id = manager_id,\nassigned_by_manager_id = manager_id,\nassigned_at = now()
-else client_assignment не существует
-  api -> db_ca : INSERT (\nclient_id,\nassigned_manager_id = manager_id,\nassigned_by_manager_id = manager_id,\nassigned_at = now()\n)
+Reply -> Auth: auth.getUser() (по JWT)
+Auth --> Reply: user
+alt invalid token
+    Reply --> App: 401 Unauthorized
 end
 
-db_ca --> api : OK
-api --> ui : 200 OK
-ui --> manager : Показывает assigned
-
-== Assign другого менеджера ==
-
-manager -> ui : Выбирает другого менеджера\nи нажимает "Assign"
-ui -> api : POST /assign { client_id,\nmanager_id = other_id }
-api -> db_managers : SELECT manager by other_id
-db_managers --> api : manager found
-
-alt client_assignment существует
-  api -> db_ca : UPDATE SET\nassigned_manager_id = other_id,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()
-else client_assignment не существует
-  api -> db_ca : INSERT (\nclient_id,\nassigned_manager_id = other_id,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()\n)
+Reply -> DB: select managers where id=managerId\n  (service_role bypass RLS)
+DB --> Reply: manager
+alt manager.user_id != user.id
+    Reply --> App: 403 (manager mismatch)
 end
 
-db_ca --> api : OK
-api --> ui : 200 OK
-ui --> manager : Показывает assigned
+alt recipeId передан
+    Reply -> DB: select recipes where id=recipeId
+    DB --> Reply: recipe (title, description)
+    Reply -> Reply: messageText = recipe.description
+end
 
-== Unassign ==
+Reply -> DB: select clients where id=chatId
+DB --> Reply: client {chat_id, escalation_status}
 
-manager -> ui : Нажимает "Unassign"
-ui -> api : POST /unassign { client_id }
-api -> db_ca : UPDATE SET\nassigned_manager_id = NULL,\nassigned_by_manager_id = current_manager_id,\nassigned_at = now()
-db_ca --> api : OK
-api --> ui : 200 OK
-ui --> manager : Показывает unassigned
+Reply -> DB: select client_assignments where client_id
+DB --> Reply: assignment
+alt assigned_manager_id != managerId
+    Reply --> App: 403 (not assigned)
+end
+
+alt escalation_status == 'escalated'
+    Reply -> DB: update clients\n  set escalation_status='manager_active'
+    Reply -> TG: sendMessage(MANAGER_JOINED_MESSAGE)
+    TG -> Client: "С вами сейчас работает наш специалист"
+end
+
+Reply -> DB: insert messages\n  (sender_type='manager', manager_id, recipe_id?)
+
+Reply -> TG: sendMessage(text [+ recipeKeyboard если recipeId])
+TG -> Client: ответ менеджера / рецепт
+TG --> Reply: ok
+Reply --> App: 200 { ok: true }
+
+RT -> App: realtime messages → новое сообщение в чате
+App --> Mgr: сообщение появилось в UI
+
+== 4. Возврат на бота (по необходимости) ==
+Mgr -> App: ReturnToBotButton
+App -> SA: returnToBot(clientId)
+SA -> DB: update clients\n  set escalation_status='normal'
+SA -> SA: revalidatePath('/', '/chat/[id]')
+note right
+  Бот снова отвечает на новые сообщения клиента,
+  потому что telegram-webhook перестаёт молчать.
+end note
 
 @enduml

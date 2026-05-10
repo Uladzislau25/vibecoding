@@ -1,35 +1,115 @@
-@startuml
+@startuml Seq-IncomingMessage
+title ChefBot — Обработка входящего сообщения от клиента
 
-skinparam titleFontSize 18
-skinparam sequenceArrowThickness 2
-skinparam sequenceParticipantFontSize 13
-skinparam sequenceMessageFontSize 12
+actor "Клиент" as User
+participant "Telegram Bot API" as TG
+participant "telegram-webhook\n(Edge Function)" as WH
+participant "_handlers / _lib" as Handlers
+participant "Jina Embeddings" as Jina
+participant "DeepSeek LLM" as DS
+database "Supabase Postgres" as DB
+participant "Supabase Realtime" as RT
+actor "Менеджер\n(support-admin)" as Mgr
 
-title Incoming Telegram Message
+User -> TG: Сообщение
+TG -> WH: POST /telegram-webhook (Update)
 
-participant "Telegram" as tg
-participant "Backend" as api
-database "clients" as db_clients
-database "messages" as db_messages
-
-tg -> api : Webhook: new message\n{ chat_id, user_id, username,\nfirst_name, last_name, text }
-
-api -> db_clients : SELECT client\nWHERE chat_id = ?
-
-alt Клиент не найден
-  api -> db_clients : INSERT (\nchat_id, user_id,\nusername, first_name, last_name\n)
-  db_clients --> api : new client (id)
-else Клиент найден
-  db_clients --> api : existing client (id)
-  opt Данные клиента изменились
-    api -> db_clients : UPDATE SET\nusername, first_name, last_name
-    db_clients --> api : OK
-  end
+alt callback_query (rate / save / clarify)
+    WH -> Handlers: handleCallbackQuery
+    Handlers -> DB: insert recipe_ratings\n/ client_favorite_recipes
+    Handlers -> TG: answerCallbackQuery + sendMessage
+    return 200 OK
 end
 
-api -> db_messages : INSERT (\nclient_id, text\n)
-db_messages --> api : OK
+WH -> WH: text = BUTTON_COMMAND_MAP[raw] ?? raw
 
-api --> tg : 200 OK
+alt text == "/start"
+    WH -> Handlers: handleStart(chatId)
+    Handlers -> TG: sendMessage (welcome + меню)
+    return 200 OK
+end
+
+WH -> DB: upsert clients (chat_id, user_id, ...)
+DB --> WH: client {id, escalation_status, setup_state}
+RT -> Mgr: realtime "clients" update
+
+WH -> DB: insert messages\n(text, telegram_message_id)
+note right of WH
+  UNIQUE (telegram_message_id) — идемпотентность.
+  Дубликат → 23505 → молча 200 OK
+end note
+
+alt escalation_status in ('escalated','manager_active')
+    WH --> TG: 200 OK (бот молчит)
+    note right: Менеджер ведёт диалог через admin-reply
+    return
+end
+
+alt команда (/preferences, /save, /saved, /list, /random, /week)
+    WH -> Handlers: handleXxx(...)
+    Handlers -> DB: read/write (preferences, favorites, recipes)
+    Handlers -> TG: sendMessage
+    return 200 OK
+end
+
+WH -> DB: COUNT messages за последний час\n(rate-limit 20/час)
+alt превышение rate-limit
+    WH -> TG: sendMessage("⏳ Слишком много запросов")
+    return
+end
+
+par fetch context (Promise.all)
+    WH -> DB: select chat_settings
+    WH -> DB: select client_preferences
+    WH -> DB: select last 10 messages
+end
+
+alt setup_state == "awaiting_preferences"
+    WH -> DB: upsert/delete client_preferences\n+ clear setup_state
+    WH -> TG: sendMessage (подтверждение)
+    WH -> DB: insert messages (sender_type='bot')
+    return
+end
+
+alt detectCasual(text) (приветствие/благодарность/прощание)
+    WH -> TG: sendMessage (случайный ответ)
+    WH -> DB: insert messages (bot)
+    return
+end
+
+== Recipe flow ==
+WH -> Handlers: processRecipeRequest(...)
+Handlers -> TG: sendChatAction("typing")
+
+Handlers -> Jina: createEmbedding(contextQuery, "query")
+Handlers -> DB: rpc search_recipes(emb, query_text, 1)
+DB --> Handlers: matches[]
+
+alt similarity >= 0.88
+    Handlers -> Handlers: reply = recipe.description
+else miss
+    Handlers -> DS: chat completions\n(structured output)
+    DS --> Handlers: {can_help, need_clarification, options,\n title, ingredients, instructions, ...}
+
+    alt need_clarification
+        Handlers -> TG: sendMessage(question, clarifyKeyboard)
+    else !can_help
+        Handlers -> DB: update clients\n  escalation_status='escalated'\n  escalated_at=now()
+        RT -> Mgr: realtime "clients" → подсветка эскалации
+        Handlers -> TG: sendMessage(ESCALATION_MESSAGE)
+    else can_help
+        Handlers -> Jina: createEmbedding(passage, "passage")
+        Handlers -> DB: insert recipes (+ embedding)
+        alt UNIQUE conflict (23505)
+            Handlers -> DB: select existing recipe by title
+        end
+        Handlers -> TG: sendMessage(reply, recipeKeyboard 👍/👎/⭐)
+    end
+end
+
+Handlers -> DB: insert messages\n(sender_type='bot', recipe_id, tokens)
+RT -> Mgr: realtime "messages" → новое сообщение в UI
+
+WH --> TG: 200 OK
 
 @enduml

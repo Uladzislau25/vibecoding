@@ -1,24 +1,47 @@
-@startuml C4_Container
+@startuml C4-Container
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
-title Container Diagram - SupportBot
+title ChefBot — Container Diagram
 
-Person(telegram_user, "Telegram User", "Пользователь Telegram")
-Person(admin, "Admin", "Администратор")
+Person(client, "Клиент", "Telegram")
+Person(manager, "Менеджер / Админ", "Браузер")
 
-System_Ext(telegram_api, "Telegram Bot API", "Внешний API Telegram")
-
-System_Boundary(supportbot, "SupportBot System") {
-    Container(edge_function, "Telegram Webhook", "Deno / Supabase Edge Function", "Принимает webhook от Telegram, обрабатывает команды (/start), сохраняет сообщения в БД, отправляет ответы")
-    ContainerDb(database, "PostgreSQL Database", "Supabase / PostgreSQL 17", "Хранит таблицу messages: chat_id, user_id, username, first_name, last_name, text, created_at")
-    Container(web_app, "Admin Dashboard", "Next.js 16 / React 19 / TypeScript", "SSR веб-приложение: отображает сообщения, сгруппированные по пользователям, со статистикой")
+System_Boundary(chefbot, "ChefBot") {
+    Container(admin_app, "support-admin", "Next.js 16 (App Router, FSD)", "Админ-панель: чаты, история, рецепты, статистика, управление пользователями")
+    Container_Boundary(edge, "Supabase Edge Functions (Deno)") {
+        Container(fn_webhook, "telegram-webhook", "Deno Deploy", "Принимает Telegram updates, классификация, поиск рецептов, вызов LLM, эскалация")
+        Container(fn_admin_reply, "admin-reply", "Deno Deploy", "Отправка ответа менеджера в Telegram, перевод эскалации в manager_active")
+        Container(fn_add_recipe, "add-recipe", "Deno Deploy", "Добавление рецепта вручную с подсчётом эмбеддингов")
+    }
+    ContainerDb(db, "Postgres + pgvector", "Supabase Postgres", "Tables: clients, managers, messages, recipes, client_assignments, ratings, favorites, ...")
+    Container(realtime, "Supabase Realtime", "WebSocket", "Подписка на messages и clients для живого обновления UI")
+    Container(auth, "Supabase Auth", "GoTrue", "Сессии менеджеров, Google OAuth")
 }
 
-Rel(telegram_user, telegram_api, "Отправляет сообщения")
-Rel(telegram_api, edge_function, "POST webhook", "HTTPS/JSON")
-Rel(edge_function, telegram_api, "Отправляет ответы", "HTTPS/JSON")
-Rel(edge_function, database, "INSERT сообщений", "Supabase JS Client")
-Rel(web_app, database, "SELECT сообщений", "Supabase JS Client")
-Rel(admin, web_app, "Просматривает дашборд", "HTTPS/Browser")
+System_Ext(telegram, "Telegram Bot API")
+System_Ext(deepseek, "DeepSeek API", "LLM")
+System_Ext(jina, "Jina Embeddings", "BGE-M3")
 
+Rel(client, telegram, "Сообщения / кнопки")
+Rel(telegram, fn_webhook, "POST /telegram-webhook", "HTTPS")
+Rel(fn_webhook, telegram, "sendMessage / sendChatAction", "HTTPS")
+Rel(fn_admin_reply, telegram, "sendMessage", "HTTPS")
+
+Rel(manager, admin_app, "UI: чаты, ответы, история", "HTTPS")
+Rel(admin_app, auth, "Google OAuth, getUser()")
+Rel(admin_app, db, "Server Actions / Server Components", "PostgREST + RLS (anon/authenticated)")
+Rel(admin_app, realtime, "Подписка на изменения", "WSS")
+Rel(admin_app, fn_admin_reply, "POST с JWT (отправить ответ)", "HTTPS")
+Rel(admin_app, fn_add_recipe, "POST (добавить рецепт)", "HTTPS")
+
+Rel(fn_webhook, db, "CRUD: clients, messages, recipes, search_recipes()", "service_role")
+Rel(fn_webhook, deepseek, "chat completions", "HTTPS")
+Rel(fn_webhook, jina, "embeddings (query/passage)", "HTTPS")
+Rel(fn_admin_reply, db, "insert message, update escalation_status", "service_role")
+Rel(fn_add_recipe, db, "insert recipe + embedding", "service_role")
+Rel(fn_add_recipe, jina, "embeddings", "HTTPS")
+
+Rel(db, realtime, "Logical replication", "publication")
+
+SHOW_LEGEND()
 @enduml

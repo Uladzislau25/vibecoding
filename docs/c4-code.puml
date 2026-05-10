@@ -1,107 +1,118 @@
-@startuml C4_Code
-title Code Diagram - Ключевые структуры данных и модули
+@startuml C4-Code
+title ChefBot — Code Diagram (telegram-webhook recipe flow)
 
-' === Database Schema ===
-package "Database Schema" {
-    entity "messages" as msg_table {
-        * id : bigint <<PK, auto>>
-        --
-        * chat_id : bigint
-        * user_id : bigint
-        username : varchar(32)
-        first_name : varchar(64)
-        last_name : varchar(64)
-        * text : text
-        * created_at : timestamptz
+skinparam classAttributeIconSize 0
+skinparam classBackgroundColor #F5F8FF
+skinparam classBorderColor #2A4D9C
+
+package "telegram-webhook" {
+    class "index.ts" as Index <<entrypoint>> {
+        - db: SupabaseClient
+        - DEFAULT_CHAT_SETTINGS
+        - GREETING_REPLIES / GRATITUDE_REPLIES / FAREWELL_REPLIES
+        - BUTTON_COMMAND_MAP
+        + Deno.serve(req): Response
+        - upsertClient(message): Client
+        - rateLimit(clientId): boolean
+    }
+
+    package "_handlers" {
+        class "commands.ts" as Commands {
+            + handleStart(chatId)
+            + handlePreferences(db, chatId, clientId)
+            + handleSave(db, chatId, clientId)
+            + handleSaved(db, chatId, clientId)
+            + handleList(db, chatId, clientId)
+            + handleRandom(db, chatId, clientId)
+            + handleWeek(db, chatId, clientId)
+        }
+        class "callback.ts" as Callback {
+            + handleCallbackQuery(db, cb)
+            - rate(clientId, recipeId, value)
+            - save(clientId, recipeId)
+            - clarify(chatId, payload)
+        }
+    }
+
+    package "_lib" {
+        class "recipe-flow.ts" as RecipeFlow {
+            + processRecipeRequest(db, chatId, clientId, text, settings, sysPrompt, history, contextQuery)
+            + saveBotReply(db, clientId, text, recipeId?, usage?)
+            - escalate(clientId)
+        }
+        class "deepseek.ts" as DeepSeek {
+            + generateRecipe(model, sysPrompt, history, text, temp, maxTokens): GeneratedRecipe
+        }
     }
 }
 
-' === Edge Function (telegram-webhook/index.ts) ===
-package "telegram-webhook/index.ts" as webhook_pkg {
-    class "Deno.serve(handler)" as handler {
-        + req: Request
-        --
-        Проверяет метод POST
-        Парсит body как Telegram Update
-        Определяет тип: команда / сообщение
-        Возвращает Response(200)
+package "_shared" {
+    class "supabase.ts" as Supabase <<api>> {
+        + createAdminClient(): SupabaseClient
+        + createUserClient(authHeader): SupabaseClient
     }
-
-    class "TelegramUpdate" as tg_update <<interface>> {
-        + message.chat.id : number
-        + message.from.id : number
-        + message.from.username? : string
-        + message.from.first_name? : string
-        + message.from.last_name? : string
-        + message.text : string
+    class "telegram.ts" as Telegram <<api>> {
+        + tgPost(method, payload)
+        + sendMessage(chatId, text, markup?)
+        + sendTyping(chatId)
+        + recipeKeyboard(recipeId)
+        + clarifyKeyboard(options)
     }
-
-    class "SupabaseClient" as supa_edge {
-        + from("messages").insert(record)
+    class "embeddings.ts" as Embeddings {
+        + createEmbedding(text, mode: "query"|"passage"): number[]
     }
-
-    class "sendMessage()" as send_msg {
-        + chat_id : number
-        + text : string
-        --
-        fetch("api.telegram.org/bot{token}/sendMessage")
+    class "text.ts" as TextLib <<lib>> {
+        + stripMarkdown(s)
+        + detectCasual(s): "greeting"|"gratitude"|"farewell"|null
+        + extractServings(s): number|null
+        + pickRandom(arr)
     }
-}
-
-' === Admin Dashboard ===
-package "support-admin/src" as admin_pkg {
-    class "src/lib/supabase.ts" as supa_client {
-        + supabase : SupabaseClient
-        --
-        createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    class "http.ts" as HttpLib <<lib>> {
+        + corsHeaders
+        + jsonResponse(body, status)
     }
-
-    class "src/app/page.tsx" as page {
-        + Message : interface
-        --
-        async function Home()
-        .. SSR Data Fetching ..
-        supabase.from("messages")
-            .select("*")
-            .order("created_at", asc)
-        .. Grouping ..
-        groupedMessages: Record<number, Message[]>
-        .. Stats ..
-        totalMessages: number
-        uniqueUsers: number
-    }
-
-    class "Message" as msg_interface <<interface>> {
-        + id : number
-        + chat_id : number
-        + user_id : number
-        + username : string | null
-        + first_name : string | null
-        + last_name : string | null
-        + text : string
-        + created_at : string
-    }
-
-    class "src/app/layout.tsx" as layout {
-        + metadata : Metadata
-        --
-        title: "SupportBot - Сообщения"
-        fonts: Geist Sans, Geist Mono
+    class "types/index.ts" as Types <<types>> {
+        + ClientSettings
+        + ConversationMessage
+        + TokenUsage
+        + GeneratedRecipe
     }
 }
 
-' === Relations ===
-handler --> tg_update : парсит
-handler --> supa_edge : сохраняет сообщение
-handler --> send_msg : отправляет ответ
-supa_edge --> msg_table : INSERT
-send_msg --> tg_update : читает chat_id
+Index --> Commands
+Index --> Callback
+Index --> RecipeFlow : processRecipeRequest()
+Index --> Supabase : createAdminClient()
+Index --> Telegram : sendMessage / sendTyping
+Index --> TextLib : detectCasual / pickRandom
+Index ..> Types
 
-page --> supa_client : использует
-supa_client --> msg_table : SELECT
-page --> msg_interface : типизирует данные
-layout --> page : рендерит
+RecipeFlow --> DeepSeek : generateRecipe()
+RecipeFlow --> Embeddings : createEmbedding()
+RecipeFlow --> Telegram : sendMessage(.., recipeKeyboard|clarifyKeyboard)
+RecipeFlow --> TextLib : stripMarkdown / extractServings
+RecipeFlow ..> Types
 
-msg_interface ..> msg_table : маппинг строк таблицы
+Callback --> Supabase
+Callback --> Telegram
+Commands --> Supabase
+Commands --> Telegram
+
+DeepSeek ..> Types
+Embeddings --> "Jina API" as Jina <<external>>
+DeepSeek --> "DeepSeek API" as DS <<external>>
+Telegram --> "Telegram Bot API" as TG <<external>>
+Supabase --> "Postgres + RLS" as PG <<external>>
+
+note right of RecipeFlow
+  Алгоритм:
+  1. semantic search (similarity >= 0.88) — отдать готовый рецепт
+  2. иначе — LLM с structured output:
+     • need_clarification → clarifyKeyboard
+     • !can_help          → escalation_status='escalated'
+     • can_help           → INSERT recipe + embedding,
+                            recipeKeyboard (👍/👎/⭐)
+  3. saveBotReply со счётом токенов
+end note
 
 @enduml

@@ -1,66 +1,162 @@
-@startuml
+@startuml ERD
+!define table(x) entity x << (T,#5B9BD5) >>
+!define pk(x) <b><color:#B22222>x</color></b>
+!define fk(x) <i><color:#1E6B1E>x</color></i>
 
-skinparam linetype polyline
-skinparam entity {
-  BackgroundColor #FEFECE
-  BorderColor #A80036
-  FontSize 13
-}
-skinparam ArrowColor #555555
-skinparam ArrowThickness 2
-skinparam ArrowFontSize 12
-skinparam ArrowFontColor #333333
-skinparam titleFontSize 18
+title ChefBot — Entity-Relationship Diagram (Postgres + pgvector)
 
-title Entity Relationship Diagram
+hide circle
+skinparam linetype ortho
 
-entity "auth.users" as auth_users {
-  * id : uuid <<PK>>
+table(managers) {
+  pk(id) : bigint
   --
-  .. Supabase Auth schema ..
+  user_id : uuid <<auth.users>>
+  name : text
+  position : text
+  role : text  -- admin | manager | user
+  created_at : timestamptz
 }
 
-entity "managers" as managers {
-  * id : bigint <<PK, generated>>
+table(clients) {
+  pk(id) : bigint
   --
-  * user_id : uuid <<FK>>
-  * name : varchar(128)
-  * position : varchar(64)
-  created_at : timestamptz <<default now()>>
+  chat_id : bigint <<unique>>
+  user_id : bigint
+  username : text
+  first_name : text
+  last_name : text
+  status : text  -- open | closed
+  escalation_status : text  -- normal | escalated | manager_active
+  escalated_at : timestamptz
+  setup_state : text  -- awaiting_preferences | null
+  tags : text[]
+  created_at : timestamptz
 }
 
-entity "clients" as clients {
-  * id : bigint <<PK, generated>>
+table(client_assignments) {
+  pk(id) : bigint
   --
-  * chat_id : bigint <<UNIQUE>>
-  * user_id : bigint <<UNIQUE>>
-  username : varchar(32)
-  first_name : varchar(64)
-  last_name : varchar(64)
-  created_at : timestamptz <<default now()>>
+  fk(client_id) : bigint <<unique>>
+  fk(assigned_manager_id) : bigint
+  fk(assigned_by_manager_id) : bigint
+  updated_at : timestamptz
 }
 
-entity "client_assignments" as client_assignments {
-  * id : bigint <<PK, generated>>
+table(messages) {
+  pk(id) : bigint
   --
-  * client_id : bigint <<FK, UNIQUE>>
-  assigned_manager_id : bigint <<FK>>
-  assigned_by_manager_id : bigint <<FK>>
-  updated_at : timestamptz <<default now()>>
+  fk(client_id) : bigint
+  fk(manager_id) : bigint
+  fk(recipe_id) : bigint
+  text : text
+  sender_type : text  -- client | bot | manager | note
+  telegram_message_id : bigint <<unique partial>>
+  prompt_tokens : int
+  completion_tokens : int
+  total_tokens : int
+  created_at : timestamptz
 }
 
-entity "messages" as messages {
-  * id : bigint <<PK, generated>>
+table(messages_managers) {
+  pk(id) : uuid
   --
-  * client_id : bigint <<FK>>
-  * text : text
-  * created_at : timestamptz <<default now()>>
+  fk(client_id) : bigint
+  fk(manager_id) : bigint
+  action : text  -- assigned | unassigned
+  created_at : timestamptz
 }
 
-auth_users ||--o| managers : "user_id"
-clients ||--o| client_assignments : "client_id"
-managers |o--o{ client_assignments : "assigned_manager_id"
-managers |o--o{ client_assignments : "assigned_by_manager_id"
-clients ||--o{ messages : "client_id"
+table(chat_settings) {
+  pk(client_id) : bigint
+  --
+  model : text
+  temperature : real
+  max_tokens : int
+  system_prompt : text
+}
+
+table(client_preferences) {
+  pk(client_id) : bigint
+  --
+  dietary_notes : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+table(recipes) {
+  pk(id) : bigint
+  --
+  title : varchar(256)
+  description : text
+  ingredients : text
+  instructions : text
+  category : text
+  embedding : vector(1024)  -- BGE-M3
+  created_at : timestamptz
+}
+
+table(recipe_ratings) {
+  pk(id) : bigint
+  --
+  fk(client_id) : bigint
+  fk(recipe_id) : bigint
+  rating : smallint  -- 1 | -1
+  created_at : timestamptz
+  ' UNIQUE (client_id, recipe_id)
+}
+
+table(client_favorite_recipes) {
+  pk(id) : bigint
+  --
+  fk(client_id) : bigint
+  fk(recipe_id) : bigint
+  title : text
+  saved_at : timestamptz
+  ' UNIQUE (client_id, recipe_id)
+}
+
+table(auth_users) {
+  pk(id) : uuid
+  --
+  email : text
+  ' Supabase auth schema
+}
+
+' Relationships
+auth_users ||..o| managers : "user_id"
+
+clients ||--o{ messages
+managers ||--o{ messages : "manager_id (nullable)"
+recipes ||--o{ messages : "recipe_id (nullable)"
+
+clients ||--|| chat_settings
+clients ||--o| client_preferences
+clients ||--o| client_assignments
+
+managers ||--o{ client_assignments : "assigned_manager_id"
+managers ||--o{ client_assignments : "assigned_by_manager_id"
+
+clients ||--o{ messages_managers
+managers ||--o{ messages_managers
+
+clients ||--o{ recipe_ratings
+recipes ||--o{ recipe_ratings
+
+clients ||--o{ client_favorite_recipes
+recipes ||--o{ client_favorite_recipes
+
+note bottom of recipes
+  search_recipes(query_embedding, query_text, match_count)
+  • Семантический поиск: cosine sim >= 0.7
+  • + FTS по title (russian) для query_text
+end note
+
+note right of managers
+  RLS:
+  • get_my_role() = SECURITY DEFINER
+  • managers.update — только admin
+  • clients/messages/... — admin или manager
+end note
 
 @enduml
