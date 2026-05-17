@@ -1,7 +1,18 @@
 // deno-lint-ignore-file no-explicit-any
 import { sendMessage, sendTyping, recipeKeyboard } from "../../_shared/api/telegram.ts";
-import { generateWeekPlan } from "../_lib/deepseek.ts";
-import { saveBotReply } from "../_lib/recipe-flow.ts";
+import { generateWeekPlan } from "../api/deepseek.ts";
+import { insertBotMessage, getLastBotRecipeId } from "../api/messages.repo.ts";
+import { setSetupState } from "../api/clients.repo.ts";
+import { getDietaryNotes } from "../api/preferences.repo.ts";
+import {
+  addFavorite,
+  listFavoriteTitles,
+} from "../api/favorites.repo.ts";
+import {
+  getRecipeForShopping,
+  getRecipeTitle,
+  pickRandomRecipe,
+} from "../api/recipes.repo.ts";
 
 export async function handleStart(chatId: number): Promise<void> {
   await sendMessage(
@@ -20,130 +31,89 @@ export async function handleStart(chatId: number): Promise<void> {
 }
 
 export async function handlePreferences(db: any, chatId: number, clientId: number): Promise<void> {
-  await db.from("clients").update({ setup_state: "awaiting_preferences" }).eq("id", clientId);
+  await setSetupState(db, clientId, "awaiting_preferences");
   const reply =
     "✏️ Напишите ваши пищевые ограничения, аллергии или предпочтения.\n\n" +
     "Например: вегетарианец, без лактозы, не люблю острое\n\n" +
     "Или напишите «нет» чтобы сбросить.";
   await sendMessage(chatId, reply);
-  await saveBotReply(db, clientId, reply);
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleSave(db: any, chatId: number, clientId: number): Promise<void> {
-  const { data: lastMsg } = await db
-    .from("messages")
-    .select("recipe_id")
-    .eq("client_id", clientId)
-    .eq("sender_type", "bot")
-    .not("recipe_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const recipeId = await getLastBotRecipeId(db, clientId);
 
   let reply: string;
-  if (!lastMsg?.recipe_id) {
+  if (!recipeId) {
     reply = "Сначала попросите рецепт, потом сохраните его 🍽️";
   } else {
-    const { data: recipe } = await db.from("recipes").select("title").eq("id", lastMsg.recipe_id).maybeSingle();
-    const { error: saveErr } = await db.from("client_favorite_recipes").insert({
-      client_id: clientId,
-      recipe_id: lastMsg.recipe_id,
-      title: recipe?.title ?? "Рецепт",
-    });
-    reply = saveErr?.code === "23505"
+    const title = (await getRecipeTitle(db, recipeId)) ?? "Рецепт";
+    const result = await addFavorite(db, clientId, recipeId, title);
+    reply = result === "duplicate"
       ? "Этот рецепт уже в вашем избранном ⭐"
-      : `⭐ Рецепт «${recipe?.title ?? ""}» сохранён!`;
+      : `⭐ Рецепт «${title}» сохранён!`;
   }
+
   await sendMessage(chatId, reply);
-  await saveBotReply(db, clientId, reply);
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleSaved(db: any, chatId: number, clientId: number): Promise<void> {
-  const { data: favorites } = await db
-    .from("client_favorite_recipes")
-    .select("title")
-    .eq("client_id", clientId)
-    .order("saved_at", { ascending: false })
-    .limit(20);
+  const titles = await listFavoriteTitles(db, clientId, 20);
 
-  let reply: string;
-  if (!favorites?.length) {
-    reply = "У вас пока нет сохранённых рецептов.\n\nНажмите ⭐ под рецептом или используйте /save.";
-  } else {
-    const list = (favorites as { title: string }[]).map((f, i) => `${i + 1}. ${f.title}`).join("\n");
-    reply = `⭐ Ваши сохранённые рецепты:\n\n${list}\n\nНапишите название любого блюда, чтобы получить его снова.`;
-  }
+  const reply = titles.length === 0
+    ? "У вас пока нет сохранённых рецептов.\n\nНажмите ⭐ под рецептом или используйте /save."
+    : `⭐ Ваши сохранённые рецепты:\n\n${titles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nНапишите название любого блюда, чтобы получить его снова.`;
+
   await sendMessage(chatId, reply);
-  await saveBotReply(db, clientId, reply);
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleList(db: any, chatId: number, clientId: number): Promise<void> {
-  const { data: lastMsg } = await db
-    .from("messages")
-    .select("recipe_id")
-    .eq("client_id", clientId)
-    .eq("sender_type", "bot")
-    .not("recipe_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const recipeId = await getLastBotRecipeId(db, clientId);
 
   let reply: string;
-  if (!lastMsg?.recipe_id) {
+  if (!recipeId) {
     reply = "Сначала попросите рецепт, потом я составлю список покупок 🛒";
   } else {
-    const { data: recipe } = await db
-      .from("recipes")
-      .select("title, ingredients")
-      .eq("id", lastMsg.recipe_id)
-      .maybeSingle();
+    const recipe = await getRecipeForShopping(db, recipeId);
     reply = recipe
       ? `🛒 Список покупок для «${recipe.title}»:\n\n${recipe.ingredients}`
       : "Не удалось найти рецепт. Попробуйте снова.";
   }
+
   await sendMessage(chatId, reply);
-  await saveBotReply(db, clientId, reply);
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleRandom(db: any, chatId: number, clientId: number): Promise<void> {
   await sendTyping(chatId);
-  const { data: randomRecipe } = await db
-    .from("recipes")
-    .select("id, title, description")
-    .order("id", { ascending: false })
-    .limit(100)
-    .then(({ data }: { data: { id: number; title: string; description: string | null }[] | null }) => {
-      if (!data || data.length === 0) return { data: null };
-      const pick = data[Math.floor(Math.random() * data.length)];
-      return { data: pick };
-    });
+  const recipe = await pickRandomRecipe(db);
 
-  if (!randomRecipe) {
+  if (!recipe) {
     const reply = "Рецептов пока нет в базе. Попросите приготовить что-нибудь!";
     await sendMessage(chatId, reply);
-    await saveBotReply(db, clientId, reply);
-  } else {
-    const reply = randomRecipe.description ?? randomRecipe.title;
-    await sendMessage(chatId, reply, recipeKeyboard(randomRecipe.id));
-    await saveBotReply(db, clientId, reply, randomRecipe.id);
+    await insertBotMessage(db, clientId, reply);
+    return;
   }
+
+  const reply = recipe.description ?? recipe.title;
+  await sendMessage(chatId, reply, recipeKeyboard(recipe.id));
+  await insertBotMessage(db, clientId, reply, recipe.id);
 }
 
 export async function handleWeek(db: any, chatId: number, clientId: number): Promise<void> {
   await sendTyping(chatId);
-  const { data: prefs } = await db
-    .from("client_preferences")
-    .select("dietary_notes")
-    .eq("client_id", clientId)
-    .maybeSingle();
+  const dietaryNotes = await getDietaryNotes(db, clientId);
+
   try {
-    const plan = await generateWeekPlan(prefs?.dietary_notes);
+    const plan = await generateWeekPlan(dietaryNotes);
     await sendMessage(chatId, plan);
-    await saveBotReply(db, clientId, plan);
+    await insertBotMessage(db, clientId, plan);
   } catch (err) {
     console.error("Week plan error:", err);
     const reply = "Не удалось составить план питания. Попробуйте позже.";
     await sendMessage(chatId, reply);
-    await saveBotReply(db, clientId, reply);
+    await insertBotMessage(db, clientId, reply);
   }
 }
