@@ -9,7 +9,7 @@ export default async function RecipesPage() {
   const [recipesResult, ratingsResult, role] = await Promise.all([
     supabase
       .from("recipes")
-      .select("id, title, description, ingredients, instructions, category, created_at")
+      .select("id, title, description, ingredients, instructions, category, calories, protein, fat, carbs, cook_time, servings, created_at")
       .order("created_at", { ascending: false }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).from("recipe_ratings").select("recipe_id, rating"),

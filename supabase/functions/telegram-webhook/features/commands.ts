@@ -13,6 +13,7 @@ import {
   getRecipeTitle,
   pickRandomRecipe,
 } from "../api/recipes.repo.ts";
+import { formatRecipe } from "../lib/prompt.ts";
 
 export async function handleStart(chatId: number): Promise<void> {
   await sendMessage(
@@ -97,7 +98,7 @@ export async function handleRandom(db: any, chatId: number, clientId: number): P
     return;
   }
 
-  const reply = recipe.description ?? recipe.title;
+  const reply = formatRecipe(recipe);
   await sendMessage(chatId, reply, recipeKeyboard(recipe.id));
   await insertBotMessage(db, clientId, reply, recipe.id);
 }

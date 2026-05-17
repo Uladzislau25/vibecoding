@@ -6,9 +6,14 @@ import { revalidatePath } from "next/cache";
 
 export type RecipeInput = {
   title: string;
-  description: string;
   ingredients: string;
   instructions: string;
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbs: number | null;
+  cook_time: string | null;
+  servings: number | null;
 };
 
 export async function getRecipesForPicker(search: string = "") {

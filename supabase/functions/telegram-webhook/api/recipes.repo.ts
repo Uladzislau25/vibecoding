@@ -1,21 +1,33 @@
 // deno-lint-ignore-file no-explicit-any
 
-export type RecipeSearchMatch = {
+import type { RecipeNutrition } from "../../_shared/types/index.ts";
+
+export type RecipeSearchMatch = RecipeNutrition & {
   id: number;
   title: string;
   description: string | null;
+  ingredients: string;
+  instructions: string;
   similarity: number;
 };
 
-export type RecipeSummary = {
+export type RecipeSummary = RecipeNutrition & {
   id: number;
   title: string;
-  description: string | null;
+  ingredients: string;
+  instructions: string;
 };
 
 export type RecipeDedupResult = {
   recipe_id: number | null;
+  reused: boolean;
   description: string | null;
+};
+
+export type RecipeContent = RecipeNutrition & {
+  title: string;
+  ingredients: string;
+  instructions: string;
 };
 
 export type RecipeInsertInput = {
@@ -25,7 +37,11 @@ export type RecipeInsertInput = {
   instructions: string;
   category: string | null;
   embedding: number[];
+  nutrition: RecipeNutrition;
 };
+
+const RECIPE_FIELDS_SQL =
+  "id, title, ingredients, instructions, calories, protein, fat, carbs, cook_time, servings";
 
 export async function searchSimilarRecipes(
   db: any,
@@ -57,6 +73,12 @@ export async function insertRecipeWithDedup(
       p_instructions: input.instructions,
       p_category: input.category,
       p_embedding: JSON.stringify(input.embedding),
+      p_calories: input.nutrition.calories,
+      p_protein: input.nutrition.protein,
+      p_fat: input.nutrition.fat,
+      p_carbs: input.nutrition.carbs,
+      p_cook_time: input.nutrition.cook_time,
+      p_servings: input.nutrition.servings,
     })
     .single();
 
@@ -87,10 +109,19 @@ export async function getRecipeForShopping(
 export async function pickRandomRecipe(db: any, pool = 100): Promise<RecipeSummary | null> {
   const { data } = await db
     .from("recipes")
-    .select("id, title, description")
+    .select(RECIPE_FIELDS_SQL)
     .order("id", { ascending: false })
     .limit(pool);
   const rows = (data ?? []) as RecipeSummary[];
   if (rows.length === 0) return null;
   return rows[Math.floor(Math.random() * rows.length)];
+}
+
+export async function getRecipeContent(db: any, recipeId: number): Promise<RecipeContent | null> {
+  const { data } = await db
+    .from("recipes")
+    .select("title, ingredients, instructions, calories, protein, fat, carbs, cook_time, servings")
+    .eq("id", recipeId)
+    .maybeSingle();
+  return (data as RecipeContent | null) ?? null;
 }

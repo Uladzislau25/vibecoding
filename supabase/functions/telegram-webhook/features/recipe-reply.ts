@@ -4,10 +4,10 @@ import { sendMessage, sendTyping, recipeKeyboard, clarifyKeyboard } from "../../
 import { stripMarkdown, extractServings } from "../../_shared/lib/text.ts";
 import type { ClientSettings, ConversationMessage, TokenUsage } from "../../_shared/types/index.ts";
 import { generateRecipe } from "../api/deepseek.ts";
-import { insertRecipeWithDedup, searchSimilarRecipes } from "../api/recipes.repo.ts";
+import { getRecipeContent, insertRecipeWithDedup, searchSimilarRecipes } from "../api/recipes.repo.ts";
 import { insertBotMessage } from "../api/messages.repo.ts";
 import { markEscalated } from "../api/clients.repo.ts";
-import { withServings } from "../lib/prompt.ts";
+import { formatRecipe, withServings } from "../lib/prompt.ts";
 import { ESCALATION_MESSAGE, RECIPE_FAILURE_REPLY, RECIPE_SIMILARITY_THRESHOLD } from "../_config.ts";
 
 type ReplyDraft = {
@@ -62,7 +62,7 @@ async function buildReply(
     const best = matches[0];
     if (best && best.similarity >= RECIPE_SIMILARITY_THRESHOLD) {
       return {
-        text: stripMarkdown(best.description ?? best.title),
+        text: stripMarkdown(formatRecipe(best)),
         recipeId: best.id,
         clarifyOptions: [],
         escalated: false,
@@ -99,22 +99,36 @@ async function buildReply(
       };
     }
 
-    const passageInput = [generated.title, generated.reply_text, generated.ingredients, generated.instructions]
+    const generatedText = formatRecipe({
+      title: generated.title,
+      ingredients: generated.ingredients,
+      instructions: generated.instructions,
+      ...generated.nutrition,
+    });
+
+    const passageInput = [generated.title, generated.ingredients, generated.instructions]
       .filter(Boolean)
       .join("\n\n");
     const passageEmbedding = await createEmbedding(passageInput, "passage");
 
     const dedup = await insertRecipeWithDedup(db, {
       title: generated.title,
-      description: generated.reply_text,
+      description: generatedText,
       ingredients: generated.ingredients,
       instructions: generated.instructions,
       category: generated.category || null,
       embedding: passageEmbedding,
+      nutrition: generated.nutrition,
     });
 
+    let text = generatedText;
+    if (dedup?.reused && dedup.recipe_id !== null) {
+      const existing = await getRecipeContent(db, dedup.recipe_id);
+      if (existing) text = formatRecipe(existing);
+    }
+
     return {
-      text: dedup?.description ?? generated.reply_text,
+      text,
       recipeId: dedup?.recipe_id ?? null,
       clarifyOptions: [],
       escalated: false,

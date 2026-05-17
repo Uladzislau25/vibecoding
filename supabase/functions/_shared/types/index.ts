@@ -9,6 +9,15 @@ export type ConversationMessage = {
   content: string;
 };
 
+export type RecipeNutrition = {
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbs: number | null;
+  cook_time: string | null;
+  servings: number | null;
+};
+
 export type GeneratedRecipe = {
   need_clarification: boolean;
   question: string;
@@ -18,7 +27,7 @@ export type GeneratedRecipe = {
   category: string;
   ingredients: string;
   instructions: string;
-  reply_text: string;
+  nutrition: RecipeNutrition;
   usage: TokenUsage;
 };
 

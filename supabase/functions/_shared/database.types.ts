@@ -241,30 +241,48 @@ export type Database = {
       }
       recipes: {
         Row: {
+          calories: number | null
+          carbs: number | null
+          cook_time: string | null
           created_at: string
           description: string | null
           embedding: string | null
+          fat: number | null
           id: number
           ingredients: string
           instructions: string
+          protein: number | null
+          servings: number | null
           title: string
         }
         Insert: {
+          calories?: number | null
+          carbs?: number | null
+          cook_time?: string | null
           created_at?: string
           description?: string | null
           embedding?: string | null
+          fat?: number | null
           id?: never
           ingredients: string
           instructions: string
+          protein?: number | null
+          servings?: number | null
           title: string
         }
         Update: {
+          calories?: number | null
+          carbs?: number | null
+          cook_time?: string | null
           created_at?: string
           description?: string | null
           embedding?: string | null
+          fat?: number | null
           id?: never
           ingredients?: string
           instructions?: string
+          protein?: number | null
+          servings?: number | null
           title?: string
         }
         Relationships: []

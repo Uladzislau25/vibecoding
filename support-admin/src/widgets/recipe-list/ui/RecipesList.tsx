@@ -15,6 +15,24 @@ const CATEGORIES: { label: string; keywords: string[] }[] = [
   { label: "Закуски", keywords: ["закуска", "бутерброд", "канапе", "намазка", "паштет"] },
 ];
 
+type Recipe = {
+  id: number;
+  title: string;
+  description: string | null;
+  ingredients: string;
+  instructions: string;
+  category: string | null;
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbs: number | null;
+  cook_time: string | null;
+  servings: number | null;
+  created_at: string;
+};
+type RatingsMap = Record<number, { up: number; down: number }>;
+type FormState = { mode: "closed" } | { mode: "view"; recipe: Recipe } | { mode: "create" } | { mode: "edit"; id: number };
+
 function getCategory(recipe: { title: string; description: string | null; ingredients: string; category: string | null }): string {
   if (recipe.category) return recipe.category;
   const text = `${recipe.title} ${recipe.description ?? ""} ${recipe.ingredients}`.toLowerCase();
@@ -24,11 +42,28 @@ function getCategory(recipe: { title: string; description: string | null; ingred
   return "Другое";
 }
 
-type Recipe = { id: number; title: string; description: string | null; ingredients: string; instructions: string; category: string | null; created_at: string };
-type RatingsMap = Record<number, { up: number; down: number }>;
-type FormState = { mode: "closed" } | { mode: "view"; recipe: Recipe } | { mode: "create" } | { mode: "edit"; id: number };
+const EMPTY: RecipeInput = {
+  title: "",
+  ingredients: "",
+  instructions: "",
+  calories: null,
+  protein: null,
+  fat: null,
+  carbs: null,
+  cook_time: null,
+  servings: null,
+};
 
-const EMPTY: RecipeInput = { title: "", description: "", ingredients: "", instructions: "" };
+function parseNum(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function numToInput(v: number | null): string {
+  return v == null ? "" : String(v);
+}
 
 export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { recipes: Recipe[]; ratingsMap?: RatingsMap; canEdit: boolean }) {
   const [search, setSearch] = useState("");
@@ -47,12 +82,26 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
     return categorized.filter((r) => {
       if (category && r.category !== category) return false;
       if (!q) return true;
-      return r.title.toLowerCase().includes(q) || (r.description ?? "").toLowerCase().includes(q) || r.ingredients.toLowerCase().includes(q) || r.instructions.toLowerCase().includes(q);
+      return r.title.toLowerCase().includes(q) || r.ingredients.toLowerCase().includes(q) || r.instructions.toLowerCase().includes(q);
     });
   }, [categorized, search, category]);
 
   function closeForm() { setForm({ mode: "closed" }); setError(null); }
-  function openEdit(r: Recipe) { setDraft({ title: r.title, description: r.description ?? "", ingredients: r.ingredients, instructions: r.instructions }); setError(null); setForm({ mode: "edit", id: r.id }); }
+  function openEdit(r: Recipe) {
+    setDraft({
+      title: r.title,
+      ingredients: r.ingredients,
+      instructions: r.instructions,
+      calories: r.calories,
+      protein: r.protein,
+      fat: r.fat,
+      carbs: r.carbs,
+      cook_time: r.cook_time,
+      servings: r.servings,
+    });
+    setError(null);
+    setForm({ mode: "edit", id: r.id });
+  }
 
   function submit() {
     if (!draft.title.trim() || !draft.ingredients.trim() || !draft.instructions.trim()) { setError("Заполните название, ингредиенты и инструкции"); return; }
@@ -108,7 +157,7 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
           <tbody>
             {filtered.map((r) => (
               <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 cursor-pointer" onClick={() => setForm({ mode: "view", recipe: r })}>
-                <td className="px-4 py-3 align-top"><div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">{r.title}</div>{r.description && <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{r.description}</div>}</td>
+                <td className="px-4 py-3 align-top"><div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">{r.title}</div>{r.cook_time && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">⏱️ {r.cook_time}{r.calories != null && ` · ${r.calories} ккал`}</div>}</td>
                 <td className="px-4 py-3 align-top hidden md:table-cell"><div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 max-w-xs">{r.ingredients}</div></td>
                 <td className="px-4 py-3 align-top hidden lg:table-cell text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}</td>
                 <td className="px-4 py-3 align-top hidden sm:table-cell">{(() => { const rating = ratingsMap[r.id]; if (!rating || (rating.up === 0 && rating.down === 0)) return <span className="text-xs text-gray-300 dark:text-gray-600">—</span>; return <div className="flex items-center gap-2 text-xs">{rating.up > 0 && <span className="text-green-600 dark:text-green-400 font-medium">👍 {rating.up}</span>}{rating.down > 0 && <span className="text-red-500 dark:text-red-400 font-medium">👎 {rating.down}</span>}</div>; })()}</td>
@@ -136,9 +185,18 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-snug">{form.recipe.title}</h2>
                   <button type="button" onClick={closeForm} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-xl leading-none px-2 shrink-0" aria-label="Закрыть">×</button>
                 </div>
-                {form.recipe.description && <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{form.recipe.description}</p>}
                 <div><p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Ингредиенты</p><p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">{form.recipe.ingredients}</p></div>
                 <div><p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Инструкции</p><p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">{form.recipe.instructions}</p></div>
+                {(form.recipe.cook_time || form.recipe.servings || form.recipe.calories != null || form.recipe.protein != null || form.recipe.fat != null || form.recipe.carbs != null) && (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {form.recipe.cook_time && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">⏱️ Время</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.cook_time}</p></div>}
+                    {form.recipe.servings != null && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">🍽️ Порций</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.servings}</p></div>}
+                    {form.recipe.calories != null && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">Калории</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.calories} ккал</p></div>}
+                    {form.recipe.protein != null && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">Белки</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.protein} г</p></div>}
+                    {form.recipe.fat != null && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">Жиры</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.fat} г</p></div>}
+                    {form.recipe.carbs != null && <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 dark:text-gray-400">Углеводы</p><p className="text-gray-800 dark:text-gray-200">{form.recipe.carbs} г</p></div>}
+                  </div>
+                )}
                 <p className="text-xs text-gray-400 dark:text-gray-500">Добавлен: {new Date(form.recipe.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</p>
                 {canEdit && (
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
@@ -154,15 +212,55 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{form.mode === "edit" ? "Редактировать рецепт" : "Новый рецепт"}</h2>
                   <button type="button" onClick={closeForm} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 text-xl leading-none px-2" aria-label="Закрыть">×</button>
                 </div>
-                {(["title", "description", "ingredients", "instructions"] as const).map((field) => (
-                  <label key={field} className="flex flex-col gap-1.5">
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{field === "title" ? "Название *" : field === "description" ? "Описание" : field === "ingredients" ? "Ингредиенты *" : "Инструкции *"}</span>
-                    {field === "title"
-                      ? <input type="text" value={draft[field]} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} maxLength={256} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
-                      : <textarea value={draft[field]} onChange={(e) => setDraft({ ...draft, [field]: e.target.value })} rows={field === "description" ? 3 : field === "ingredients" ? 5 : 6} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y" />
-                    }
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Название *</span>
+                  <input type="text" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={256} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Ингредиенты *</span>
+                  <textarea value={draft.ingredients} onChange={(e) => setDraft({ ...draft, ingredients: e.target.value })} rows={5} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Инструкции *</span>
+                  <textarea value={draft.instructions} onChange={(e) => setDraft({ ...draft, instructions: e.target.value })} rows={6} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors resize-y" />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">⏱️ Время приготовления</span>
+                    <input type="text" value={draft.cook_time ?? ""} onChange={(e) => setDraft({ ...draft, cook_time: e.target.value.trim() || null })} placeholder="например: 30 минут" className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
                   </label>
-                ))}
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">🍽️ Порций</span>
+                    <input type="number" inputMode="numeric" value={numToInput(draft.servings)} onChange={(e) => setDraft({ ...draft, servings: parseNum(e.target.value) })} min={1} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                  </label>
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">📊 Пищевая ценность (на 1 порцию)</p>
+                  <div className="grid grid-cols-4 gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-500">Калории, ккал</span>
+                      <input type="number" inputMode="numeric" value={numToInput(draft.calories)} onChange={(e) => setDraft({ ...draft, calories: parseNum(e.target.value) })} min={0} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-500">Белки, г</span>
+                      <input type="number" inputMode="decimal" step="0.1" value={numToInput(draft.protein)} onChange={(e) => setDraft({ ...draft, protein: parseNum(e.target.value) })} min={0} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-500">Жиры, г</span>
+                      <input type="number" inputMode="decimal" step="0.1" value={numToInput(draft.fat)} onChange={(e) => setDraft({ ...draft, fat: parseNum(e.target.value) })} min={0} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-500">Углеводы, г</span>
+                      <input type="number" inputMode="decimal" step="0.1" value={numToInput(draft.carbs)} onChange={(e) => setDraft({ ...draft, carbs: parseNum(e.target.value) })} min={0} className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+                    </label>
+                  </div>
+                </div>
+
                 {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2">{error}</p>}
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button type="button" onClick={closeForm} disabled={submitting} className="text-sm font-medium px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">Отмена</button>
