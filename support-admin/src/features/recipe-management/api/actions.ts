@@ -57,3 +57,25 @@ export async function deleteRecipe(id: number) {
 
   revalidatePath("/recipes");
 }
+
+export type EstimatedNutrition = {
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbs: number | null;
+  cook_time: string | null;
+  servings: number | null;
+};
+
+export async function estimateRecipeNutrition(
+  input: { title: string; ingredients: string; instructions: string },
+): Promise<EstimatedNutrition> {
+  await requireRole("admin", "manager");
+  const supabase = await createSupabaseServer();
+
+  const { data, error } = await supabase.functions.invoke("estimate-nutrition", { body: input });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+
+  return data.nutrition as EstimatedNutrition;
+}

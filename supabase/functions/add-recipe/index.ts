@@ -1,6 +1,7 @@
 import { createAdminClient } from "../_shared/api/supabase.ts";
 import { createEmbedding } from "../_shared/embeddings.ts";
 import { corsHeaders, jsonResponse } from "../_shared/lib/http.ts";
+import { buildRecipeDescription } from "../_shared/lib/nutrition.ts";
 
 const admin = createAdminClient();
 
@@ -15,44 +16,6 @@ function num(v: unknown): number | null {
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-
-function buildDescription(input: {
-  title: string;
-  ingredients: string;
-  instructions: string;
-  calories: number | null;
-  protein: number | null;
-  fat: number | null;
-  carbs: number | null;
-  cook_time: string | null;
-  servings: number | null;
-}): string {
-  const parts: string[] = [
-    `🍽️ ${input.title}`,
-    "",
-    "🛒 Ингредиенты:",
-    input.ingredients,
-    "",
-    "👨‍🍳 Приготовление:",
-    input.instructions,
-  ];
-
-  const meta: string[] = [];
-  if (input.cook_time) meta.push(`⏱️ Время приготовления: ${input.cook_time}`);
-  if (input.servings) meta.push(`🍽️ Порций: ${input.servings}`);
-  if (meta.length > 0) parts.push("", ...meta);
-
-  const nutrition: string[] = [];
-  if (input.calories != null) nutrition.push(`• Калории: ${input.calories} ккал`);
-  if (input.protein != null) nutrition.push(`• Белки: ${input.protein} г`);
-  if (input.fat != null) nutrition.push(`• Жиры: ${input.fat} г`);
-  if (input.carbs != null) nutrition.push(`• Углеводы: ${input.carbs} г`);
-  if (nutrition.length > 0) {
-    parts.push("", "📊 Пищевая ценность (на 1 порцию):", ...nutrition);
-  }
-
-  return parts.join("\n");
 }
 
 Deno.serve(async (req) => {
@@ -81,7 +44,7 @@ Deno.serve(async (req) => {
     const cook_time = str(body?.cook_time);
     const servings = num(body?.servings);
 
-    const description = buildDescription({
+    const description = buildRecipeDescription({
       title, ingredients, instructions,
       calories, protein, fat, carbs, cook_time, servings,
     });

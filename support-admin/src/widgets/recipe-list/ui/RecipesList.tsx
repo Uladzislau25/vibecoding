@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createRecipe, deleteRecipe, updateRecipe, type RecipeInput } from "@/features/recipe-management/api/actions";
+import { createRecipe, deleteRecipe, estimateRecipeNutrition, updateRecipe, type RecipeInput } from "@/features/recipe-management/api/actions";
 
 const CATEGORIES: { label: string; keywords: string[] }[] = [
   { label: "Супы", keywords: ["суп", "борщ", "щи", "бульон", "похлёбка", "уха", "солянка", "рассольник"] },
@@ -73,7 +73,29 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
   const [submitting, startSubmit] = useTransition();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deletingPending, startDelete] = useTransition();
+  const [estimating, setEstimating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleEstimate() {
+    if (!draft.title.trim() || !draft.ingredients.trim() || !draft.instructions.trim()) {
+      setError("Заполните название, ингредиенты и инструкции — ИИ нужны они для оценки");
+      return;
+    }
+    setError(null);
+    setEstimating(true);
+    try {
+      const n = await estimateRecipeNutrition({
+        title: draft.title,
+        ingredients: draft.ingredients,
+        instructions: draft.instructions,
+      });
+      setDraft({ ...draft, ...n });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось оценить через ИИ");
+    } finally {
+      setEstimating(false);
+    }
+  }
 
   const categorized = useMemo(() => recipes.map((r) => ({ ...r, category: getCategory(r) })), [recipes]);
   const usedCategories = useMemo(() => { const counts: Record<string, number> = {}; for (const r of categorized) counts[r.category] = (counts[r.category] ?? 0) + 1; return counts; }, [categorized]);
@@ -240,7 +262,10 @@ export default function RecipesList({ recipes, ratingsMap = {}, canEdit }: { rec
                 </div>
 
                 <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">📊 Пищевая ценность (на 1 порцию)</p>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">📊 Пищевая ценность (на 1 порцию)</p>
+                    <button type="button" onClick={handleEstimate} disabled={estimating || submitting} className="text-xs font-medium px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50">{estimating ? "Оцениваю…" : "✨ Оценить через ИИ"}</button>
+                  </div>
                   <div className="grid grid-cols-4 gap-3">
                     <label className="flex flex-col gap-1">
                       <span className="text-[11px] text-gray-500 dark:text-gray-500">Калории, ккал</span>
