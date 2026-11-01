@@ -35,8 +35,8 @@ package "telegram-webhook" {
         class "recipe-reply.ts" as RecipeFlow {
             + processRecipeRequest(db, input)
             - buildReply(db, input, sysPrompt): ReplyDraft
-            - findSimilarRecipe(db, contextQuery)  <<best-effort>>
-            - storeRecipe(db, generated, text)     <<best-effort>>
+            - findSimilarRecipe(db, contextQuery) : best-effort
+            - storeRecipe(db, generated, text) : best-effort
         }
     }
 
@@ -106,11 +106,16 @@ Callback --> Telegram
 Commands --> Supabase
 Commands --> Telegram
 
+class "Gemini Embeddings API" as Gemini <<external>>
+class "DeepSeek API" as DS <<external>>
+class "Telegram Bot API" as TG <<external>>
+class "Postgres + RLS" as PG <<external>>
+
 DeepSeek ..> Types
-Embeddings --> "Gemini Embeddings API" as Gemini <<external>>
-DeepSeek --> "DeepSeek API" as DS <<external>>
-Telegram --> "Telegram Bot API" as TG <<external>>
-Supabase --> "Postgres + RLS" as PG <<external>>
+Embeddings --> Gemini
+DeepSeek --> DS
+Telegram --> TG
+Supabase --> PG
 
 note right of RecipeFlow
   Алгоритм:
