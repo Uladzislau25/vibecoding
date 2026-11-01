@@ -7,12 +7,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "../_shared/api/supabase.ts";
 import { corsHeaders, jsonResponse } from "../_shared/lib/http.ts";
-import { extractServings, stripMarkdown } from "../_shared/lib/text.ts";
+import { detectCasual, extractServings, pickRandom, stripMarkdown } from "../_shared/lib/text.ts";
 import { deriveContextQuery, gatherChatContext } from "../telegram-webhook/lib/context.ts";
 import { withServings } from "../telegram-webhook/lib/prompt.ts";
 import { buildRecipeReply } from "../telegram-webhook/features/recipe-reply.ts";
 import { insertBotMessage, insertClientMessage } from "../telegram-webhook/api/messages.repo.ts";
 import { markEscalated } from "../telegram-webhook/api/clients.repo.ts";
+import { FAREWELL_REPLIES, GRATITUDE_REPLIES, GREETING_REPLIES } from "../telegram-webhook/_config.ts";
 
 const admin = createAdminClient();
 
@@ -84,6 +85,19 @@ Deno.serve(async (req) => {
   try {
     // Persist the user's message first so it is part of the gathered history.
     await insertClientMessage(admin, { clientId, text, telegramMessageId: null });
+
+    // Greetings / thanks / goodbyes: reply casually instead of running the recipe
+    // engine (which would escalate a "Привет" as a non-culinary request).
+    const casual = detectCasual(text);
+    if (casual) {
+      const reply = casual === "greeting"
+        ? pickRandom(GREETING_REPLIES)
+        : casual === "gratitude"
+        ? pickRandom(GRATITUDE_REPLIES)
+        : pickRandom(FAREWELL_REPLIES);
+      await insertBotMessage(admin, clientId, reply);
+      return jsonResponse({ text: reply, recipeId: null, clarifyOptions: [], escalated: false });
+    }
 
     const { settings, systemPrompt, conversationHistory, chronologicalHistory } =
       await gatherChatContext(admin, clientId);
