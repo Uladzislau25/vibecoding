@@ -73,6 +73,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      recipes: {
+        Row: {
+          id: number;
+          title: string;
+          ingredients: string;
+          instructions: string;
+          calories: number | null;
+          protein: number | null;
+          fat: number | null;
+          carbs: number | null;
+          cook_time: string | null;
+          servings: number | null;
+        };
+        Insert: { title: string; ingredients: string; instructions: string };
+        Update: { title?: string };
+        Relationships: [];
+      };
+      client_favorite_recipes: {
+        Row: {
+          id: number;
+          client_id: number;
+          recipe_id: number;
+          title: string;
+          saved_at: string;
+        };
+        Insert: { client_id: number; recipe_id: number; title: string };
+        Update: { title?: string };
+        Relationships: [];
+      };
+      client_preferences: {
+        Row: {
+          client_id: number;
+          dietary_notes: string;
+          updated_at: string;
+        };
+        Insert: { client_id: number; dietary_notes: string };
+        Update: { dietary_notes?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -82,6 +121,18 @@ export type Database = {
       };
       clear_my_web_history: {
         Args: Record<string, never>;
+        Returns: undefined;
+      };
+      rate_recipe: {
+        Args: { p_recipe_id: number; p_rating: number };
+        Returns: undefined;
+      };
+      save_favorite: {
+        Args: { p_recipe_id: number; p_title: string };
+        Returns: undefined;
+      };
+      set_preferences: {
+        Args: { p_notes: string };
         Returns: undefined;
       };
     };
