@@ -19,8 +19,16 @@
   --foreground: #ededed;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* stop iOS rubber-band scroll of the whole page behind the chat */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }

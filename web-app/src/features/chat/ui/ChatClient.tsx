@@ -136,7 +136,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
 
       <form
         onSubmit={onSubmit}
-        className="shrink-0 flex items-end gap-2 border-t border-gray-200 dark:border-gray-800 px-3 py-3 bg-white dark:bg-gray-900"
+        className="shrink-0 flex items-end gap-2 border-t border-gray-200 dark:border-gray-800 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] bg-white dark:bg-gray-900"
       >
         <textarea
           value={input}
@@ -149,7 +149,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
           }}
           rows={1}
           placeholder="Что готовим?"
-          className="flex-1 resize-none rounded-2xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors max-h-32"
+          className="flex-1 resize-none rounded-2xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2.5 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors max-h-32"
         />
         <button
           type="submit"

@@ -12,12 +12,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover", // let content use the full screen; we pad with safe-area insets
   themeColor: "#f97316",
 };
 
 export const metadata: Metadata = {
   title: { template: "%s — ChefBot", default: "ChefBot — кулинарный помощник" },
   description: "Рецепты, КБЖУ и списки покупок от ИИ-повара",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "ChefBot" },
 };
 
 export default function RootLayout({
