@@ -94,7 +94,7 @@
 1. Собирается контекст: последние 10 сообщений + предпочтения (`client_preferences.dietary_notes`) + персонализированный system prompt + порции (если в тексте).
 2. Эмбеддинг запроса (Jina BGE-M3, режим `query`) → `search_recipes(embedding, query_text, 1)`.
 3. Если `similarity ≥ 0.88` — вернуть готовый рецепт, прикрепить recipe-keyboard.
-4. Иначе — вызов **DeepSeek** (`deepseek-v4-flash` по умолчанию) с structured output:
+4. Иначе — вызов **DeepSeek** (`deepseek-flash` по умолчанию) с structured output:
    - `need_clarification: true` → отправить вопрос с clarify-keyboard.
    - `can_help: false` → перевести клиента в `escalation_status = 'escalated'`, `escalated_at = now()`, отправить ESCALATION_MESSAGE.
    - `can_help: true` → создать эмбеддинг (режим `passage`), `INSERT recipes`, отправить рецепт с recipe-keyboard. При конфликте `UNIQUE` (по нормализованному title) — переиспользовать существующий.
@@ -209,7 +209,7 @@
 | Admin frontend | Next.js 16 (App Router, React 19, Server Actions) |
 | Styling | Tailwind CSS v4 |
 | Architecture | Feature-Sliced Design |
-| LLM | DeepSeek (`deepseek-v4-flash` / `deepseek-v4-pro`) |
+| LLM | DeepSeek (`deepseek-flash` / `deepseek-v4-pro`) |
 | Embeddings | Jina BGE-M3 (1024-d) |
 | Telegram | Bot API (long-polling выключен, используется webhook) |
 | Package manager | pnpm (workspace) |
@@ -330,7 +330,7 @@ vibecoding/
 
 ### 8.2 DeepSeek
 - Endpoint: OpenAI-совместимый (`/v1/chat/completions`).
-- Модели: `deepseek-v4-flash` (default), `deepseek-v4-pro` (per-client override через `chat_settings.model`).
+- Модели: `deepseek-flash` (default), `deepseek-v4-pro` (per-client override через `chat_settings.model`).
 - Формат ответа — **structured JSON**:
   ```json
   {

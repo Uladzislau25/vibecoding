@@ -18,7 +18,7 @@ type ModelMeta = {
 };
 
 const MODELS: ModelMeta[] = [
-  { value: "deepseek-v4-flash", label: "deepseek-v4-flash", tier: "Базовая", tierClass: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", hint: "Быстрее всего, подходит для большинства задач" },
+  { value: "deepseek-flash", label: "deepseek-flash", tier: "Базовая", tierClass: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", hint: "Быстрее всего, подходит для большинства задач" },
   { value: "deepseek-v4-pro", label: "deepseek-v4-pro", tier: "Топ", tierClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", hint: "Самая мощная, рассуждает пошагово" },
 ];
 

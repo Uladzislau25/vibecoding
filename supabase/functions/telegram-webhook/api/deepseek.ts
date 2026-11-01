@@ -102,7 +102,7 @@ export async function generateWeekPlan(dietaryNotes: string | null | undefined):
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
     body: JSON.stringify({
-      model: "deepseek-v4-flash",
+      model: "deepseek-flash",
       temperature: 0.9,
       max_tokens: 2000,
       messages: [

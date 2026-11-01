@@ -4,7 +4,7 @@ import { createSupabaseServer } from "@/shared/api/supabase-server";
 import { revalidatePath } from "next/cache";
 
 export type ChatSettingsInput = {
-  model: "deepseek-v4-flash" | "deepseek-v4-pro";
+  model: "deepseek-flash" | "deepseek-v4-pro";
   max_tokens: number;
 };
 

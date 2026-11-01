@@ -30,7 +30,7 @@ export async function estimateNutritionWithDeepseek(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: "deepseek-flash",
       temperature: 0.3,
       max_tokens: 500,
       response_format: { type: "json_object" },

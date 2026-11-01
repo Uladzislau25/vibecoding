@@ -3,7 +3,7 @@ import type { ClientSettings } from "../_shared/types/index.ts";
 export const RATE_LIMIT_PER_HOUR = 20;
 
 export const DEFAULT_CHAT_SETTINGS: ClientSettings = {
-  model: "deepseek-v4-flash",
+  model: "deepseek-flash",
   temperature: 0.8,
   max_tokens: 10000,
   system_prompt:

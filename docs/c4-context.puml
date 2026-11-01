@@ -10,7 +10,7 @@ Person(admin, "Администратор", "Управляет менеджер
 System(chefbot, "ChefBot", "Telegram-бот + админ-панель: подбор рецептов AI, эскалация на менеджера, история диалогов")
 
 System_Ext(telegram, "Telegram Bot API", "Доставка сообщений и callback'ов")
-System_Ext(deepseek, "DeepSeek API", "LLM для генерации рецептов (deepseek-v4-flash / v4-pro)")
+System_Ext(deepseek, "DeepSeek API", "LLM для генерации рецептов (deepseek-flash / v4-pro)")
 System_Ext(jina, "Jina Embeddings API", "BGE-M3 эмбеддинги для семантического поиска рецептов")
 System_Ext(google, "Google OAuth", "Аутентификация менеджеров в админ-панели")
 
