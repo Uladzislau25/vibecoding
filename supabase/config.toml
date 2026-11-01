@@ -412,3 +412,10 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/cron-recipe/deno.json"
 entrypoint = "./functions/cron-recipe/index.ts"
+
+[functions.web-chat]
+enabled = true
+# Called from the PWA with a Supabase user access token.
+verify_jwt = true
+import_map = "./functions/web-chat/deno.json"
+entrypoint = "./functions/web-chat/index.ts"

@@ -94,36 +94,42 @@ export type Database = {
       }
       clients: {
         Row: {
-          chat_id: number
+          auth_user_id: string | null
+          chat_id: number | null
           created_at: string | null
           first_name: string | null
           id: number
           last_name: string | null
+          platform: string
           status: string
           subscribed: boolean
-          user_id: number
+          user_id: number | null
           username: string | null
         }
         Insert: {
-          chat_id: number
+          auth_user_id?: string | null
+          chat_id?: number | null
           created_at?: string | null
           first_name?: string | null
           id?: never
           last_name?: string | null
+          platform?: string
           status?: string
           subscribed?: boolean
-          user_id: number
+          user_id?: number | null
           username?: string | null
         }
         Update: {
-          chat_id?: number
+          auth_user_id?: string | null
+          chat_id?: number | null
           created_at?: string | null
           first_name?: string | null
           id?: never
           last_name?: string | null
+          platform?: string
           status?: string
           subscribed?: boolean
-          user_id?: number
+          user_id?: number | null
           username?: string | null
         }
         Relationships: []

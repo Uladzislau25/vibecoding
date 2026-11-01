@@ -101,13 +101,17 @@ async function broadcast(text: string, recipeId: number | null): Promise<number>
   const { data, error } = await admin
     .from("clients")
     .select("chat_id")
-    .eq("subscribed", true);
+    .eq("subscribed", true)
+    .eq("platform", "telegram")
+    .not("chat_id", "is", null);
   if (error) {
     console.error("Failed to load clients for broadcast:", error);
     return 0;
   }
 
-  const chatIds = (data ?? []).map((r: { chat_id: number }) => r.chat_id);
+  const chatIds = (data ?? [])
+    .map((r: { chat_id: number | null }) => r.chat_id)
+    .filter((id): id is number => id !== null);
   const markup = recipeId !== null ? recipeKeyboard(recipeId) : undefined;
   let sent = 0;
 

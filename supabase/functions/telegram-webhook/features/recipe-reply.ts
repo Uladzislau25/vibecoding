@@ -11,7 +11,7 @@ import { markEscalated } from "../api/clients.repo.ts";
 import { formatRecipe, withServings } from "../lib/prompt.ts";
 import { ESCALATION_MESSAGE, RECIPE_FAILURE_REPLY, RECIPE_SIMILARITY_THRESHOLD } from "../_config.ts";
 
-type ReplyDraft = {
+export type ReplyDraft = {
   text: string;
   recipeId: number | null;
   clarifyOptions: string[];
@@ -21,14 +21,18 @@ type ReplyDraft = {
 
 const EMPTY_USAGE: TokenUsage = { prompt_tokens: null, completion_tokens: null, total_tokens: null };
 
-export type ProcessRecipeRequestInput = {
-  chatId: number;
-  clientId: number;
+// Transport-agnostic core input: everything buildRecipeReply needs, no chat/delivery concerns.
+export type RecipeEngineInput = {
   userText: string;
   settings: ClientSettings;
-  systemPrompt: string;
   history: ConversationMessage[];
   contextQuery: string;
+};
+
+export type ProcessRecipeRequestInput = RecipeEngineInput & {
+  chatId: number;
+  clientId: number;
+  systemPrompt: string;
 };
 
 export async function processRecipeRequest(
@@ -40,7 +44,7 @@ export async function processRecipeRequest(
 
   await sendTyping(input.chatId);
 
-  const draft = await buildReply(db, input, systemPrompt);
+  const draft = await buildRecipeReply(db, input, systemPrompt);
   const text = stripMarkdown(draft.text);
 
   await deliverReply(input.chatId, text, draft);
@@ -51,9 +55,9 @@ export async function processRecipeRequest(
   }
 }
 
-async function buildReply(
+export async function buildRecipeReply(
   db: any,
-  input: ProcessRecipeRequestInput,
+  input: RecipeEngineInput,
   systemPrompt: string,
 ): Promise<ReplyDraft> {
   try {
