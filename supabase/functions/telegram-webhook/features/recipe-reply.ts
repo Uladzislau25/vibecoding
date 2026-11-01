@@ -2,8 +2,9 @@
 import { createEmbedding } from "../../_shared/embeddings.ts";
 import { sendMessage, sendTyping, recipeKeyboard, clarifyKeyboard } from "../../_shared/api/telegram.ts";
 import { stripMarkdown, extractServings } from "../../_shared/lib/text.ts";
-import type { ClientSettings, ConversationMessage, TokenUsage } from "../../_shared/types/index.ts";
+import type { ClientSettings, ConversationMessage, GeneratedRecipe, TokenUsage } from "../../_shared/types/index.ts";
 import { generateRecipe } from "../api/deepseek.ts";
+import type { RecipeSearchMatch } from "../api/recipes.repo.ts";
 import { getRecipeContent, insertRecipeWithDedup, searchSimilarRecipes } from "../api/recipes.repo.ts";
 import { insertBotMessage } from "../api/messages.repo.ts";
 import { markEscalated } from "../api/clients.repo.ts";
@@ -56,10 +57,7 @@ async function buildReply(
   systemPrompt: string,
 ): Promise<ReplyDraft> {
   try {
-    const queryEmbedding = await createEmbedding(input.contextQuery, "query");
-    const matches = await searchSimilarRecipes(db, queryEmbedding, input.contextQuery, 1);
-
-    const best = matches[0];
+    const best = await findSimilarRecipe(db, input.contextQuery);
     if (best && best.similarity >= RECIPE_SIMILARITY_THRESHOLD) {
       return {
         text: stripMarkdown(formatRecipe(best)),
@@ -106,6 +104,48 @@ async function buildReply(
       ...generated.nutrition,
     });
 
+    const stored = await storeRecipe(db, generated, generatedText);
+
+    return {
+      text: stored.text,
+      recipeId: stored.recipeId,
+      clarifyOptions: [],
+      escalated: false,
+      usage: generated.usage,
+    };
+  } catch (err) {
+    console.error("Failed to build reply:", err);
+    return {
+      text: RECIPE_FAILURE_REPLY,
+      recipeId: null,
+      clarifyOptions: [],
+      escalated: false,
+      usage: EMPTY_USAGE,
+    };
+  }
+}
+
+// Semantic search is best-effort: if the embedding provider is down, skip it
+// and fall through to generation instead of failing the whole request.
+async function findSimilarRecipe(db: any, contextQuery: string): Promise<RecipeSearchMatch | undefined> {
+  try {
+    const queryEmbedding = await createEmbedding(contextQuery, "query");
+    const matches = await searchSimilarRecipes(db, queryEmbedding, contextQuery, 1);
+    return matches[0];
+  } catch (err) {
+    console.error("Semantic search unavailable, generating without it:", err);
+    return undefined;
+  }
+}
+
+// Persisting + dedup is also best-effort: if embedding or the RPC fails, still
+// return the freshly generated recipe (just without a stored id / dedup).
+async function storeRecipe(
+  db: any,
+  generated: GeneratedRecipe,
+  generatedText: string,
+): Promise<{ text: string; recipeId: number | null }> {
+  try {
     const passageInput = [generated.title, generated.ingredients, generated.instructions]
       .filter(Boolean)
       .join("\n\n");
@@ -121,28 +161,15 @@ async function buildReply(
       nutrition: generated.nutrition,
     });
 
-    let text = generatedText;
     if (dedup?.reused && dedup.recipe_id !== null) {
       const existing = await getRecipeContent(db, dedup.recipe_id);
-      if (existing) text = formatRecipe(existing);
+      if (existing) return { text: formatRecipe(existing), recipeId: dedup.recipe_id };
     }
 
-    return {
-      text,
-      recipeId: dedup?.recipe_id ?? null,
-      clarifyOptions: [],
-      escalated: false,
-      usage: generated.usage,
-    };
+    return { text: generatedText, recipeId: dedup?.recipe_id ?? null };
   } catch (err) {
-    console.error("Failed to build reply:", err);
-    return {
-      text: RECIPE_FAILURE_REPLY,
-      recipeId: null,
-      clarifyOptions: [],
-      escalated: false,
-      usage: EMPTY_USAGE,
-    };
+    console.error("Failed to store recipe, replying without persistence:", err);
+    return { text: generatedText, recipeId: null };
   }
 }
 
