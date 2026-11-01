@@ -33,7 +33,7 @@
 | **Администратор** | Менеджер с ролью `admin`, может управлять ролями других менеджеров. |
 | **Эскалация** | Перевод диалога с бота на менеджера. Состояния: `normal`, `escalated`, `manager_active`. |
 | **Назначение (assignment)** | Связка клиент ↔ ответственный менеджер (1:1) в `client_assignments`. |
-| **Recipe** | Сгенерированный или добавленный вручную рецепт с эмбеддингом (BGE-M3, 1024). |
+| **Recipe** | Сгенерированный или добавленный вручную рецепт с эмбеддингом (Gemini `gemini-embedding-001`, 1024). |
 | **Embedding** | Векторное представление текста (`vector(1024)`), используется для семантического поиска через `pgvector`. |
 | **Idempotency** | Защита от двойной обработки одного Telegram update'а через `messages.telegram_message_id` (UNIQUE). |
 | **Setup state** | Многошаговый диалог-флоу клиента (`clients.setup_state`), напр. `awaiting_preferences`. |
@@ -92,8 +92,8 @@
 
 #### FR-6. Recipe-flow (генерация / поиск рецепта)
 1. Собирается контекст: последние 10 сообщений + предпочтения (`client_preferences.dietary_notes`) + персонализированный system prompt + порции (если в тексте).
-2. Эмбеддинг запроса (Jina BGE-M3, режим `query`) → `search_recipes(embedding, query_text, 1)`.
-3. Если `similarity ≥ 0.88` — вернуть готовый рецепт, прикрепить recipe-keyboard.
+2. Эмбеддинг запроса (Gemini `gemini-embedding-001`, режим `query`) → `search_recipes(embedding, query_text, 1)`.
+3. Если `similarity ≥ 0.80` — вернуть готовый рецепт, прикрепить recipe-keyboard.
 4. Иначе — вызов **DeepSeek** (`deepseek-flash` по умолчанию) с structured output:
    - `need_clarification: true` → отправить вопрос с clarify-keyboard.
    - `can_help: false` → перевести клиента в `escalation_status = 'escalated'`, `escalated_at = now()`, отправить ESCALATION_MESSAGE.
@@ -171,7 +171,7 @@
 
 #### FR-18. `add-recipe`
 - Принимает рецепт (title, description, ingredients, instructions, category).
-- Считает эмбеддинг (Jina, режим `passage`).
+- Считает эмбеддинг (Gemini, режим `passage`).
 - Insert в `recipes`.
 
 ---
@@ -181,7 +181,7 @@
 | ID | Требование |
 | --- | --- |
 | NFR-1 | **Идемпотентность** webhook'а: дубль `telegram_message_id` → молча 200. |
-| NFR-2 | **Latency**: ответ бота на запрос рецепта ≤ 6 сек p95 (DeepSeek + Jina). |
+| NFR-2 | **Latency**: ответ бота на запрос рецепта ≤ 6 сек p95 (DeepSeek + Gemini). |
 | NFR-3 | **Доступность**: edge-функции — Supabase Functions (auto-scale). Админка — Vercel/любой Node hosting. |
 | NFR-4 | **Realtime**: задержка обновления UI при новом сообщении ≤ 1 сек. |
 | NFR-5 | **Безопасность**: secrets (DeepSeek API key, Telegram token, Service Role) — только в env edge-функций. Никогда в репо или клиентском бандле. |
@@ -210,7 +210,7 @@
 | Styling | Tailwind CSS v4 |
 | Architecture | Feature-Sliced Design |
 | LLM | DeepSeek (`deepseek-flash` / `deepseek-v4-pro`) |
-| Embeddings | Jina BGE-M3 (1024-d) |
+| Embeddings | Google Gemini `gemini-embedding-001` (1024-d) |
 | Telegram | Bot API (long-polling выключен, используется webhook) |
 | Package manager | pnpm (workspace) |
 
@@ -224,7 +224,7 @@ vibecoding/
 │   ├── migrations/                # timestamp-based SQL миграции
 │   └── functions/
 │       ├── _shared/               # api/ lib/ types/ embeddings.ts database.types.ts
-│       ├── telegram-webhook/      # _handlers/ _lib/ index.ts
+│       ├── telegram-webhook/      # features/ api/ lib/ index.ts _config.ts (FSD)
 │       ├── admin-reply/
 │       └── add-recipe/
 └── support-admin/                 # Next.js админка (FSD)
@@ -294,7 +294,7 @@ vibecoding/
 | `title` | varchar(256) | UNIQUE по нормализованной форме |
 | `description`, `ingredients`, `instructions` | text | |
 | `category` | text | |
-| `embedding` | vector(1024) | BGE-M3 |
+| `embedding` | vector(1024) | Gemini `gemini-embedding-001` |
 | `created_at` | timestamptz | |
 
 ### 7.5 Прочее
@@ -347,10 +347,11 @@ vibecoding/
   ```
 - Default настройки: `temperature=0.8`, `max_tokens=10000`.
 
-### 8.3 Jina Embeddings
-- Endpoint: `https://api.jina.ai/v1/embeddings`.
-- Модель: `jina-embeddings-v3` BGE-M3 совместимая, размерность **1024**.
-- Два режима: `query` (для поискового запроса) и `passage` (для индексации рецепта).
+### 8.3 Google Gemini Embeddings
+- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent`.
+- Модель: `gemini-embedding-001`, `outputDimensionality=1024`, вектор L2-нормализуется.
+- Два режима (task type): `query` → `RETRIEVAL_QUERY`, `passage` → `RETRIEVAL_DOCUMENT`.
+- Вызовы best-effort: при сбое провайдера семантический поиск и дедуп пропускаются, рецепт всё равно генерируется (нет полного отказа).
 
 ### 8.4 Google OAuth
 - Через Supabase Auth Provider.
@@ -380,7 +381,7 @@ vibecoding/
 - Локальная разработка: `supabase start`, `supabase functions serve <name>`, `pnpm --filter support-admin dev`.
 
 ### 10.2 Конфигурация (env)
-- **Edge Functions**: `TELEGRAM_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `JINA_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+- **Edge Functions**: `TELEGRAM_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **Admin**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_FUNCTIONS_URL`.
 
 ### 10.3 Чек-лист релиза
@@ -401,8 +402,8 @@ vibecoding/
 | **S1. Foundation** | Supabase проект, Auth (Google), базовые миграции (`managers`, `clients`, `messages`), RLS-helper `get_my_role()`. | Login + пустой layout админки. |
 | **S2. Bot MVP** | `telegram-webhook` MVP: upsert client, save message, simple LLM reply. Telegram webhook live. | Бот отвечает в продакшне. |
 | **S3. Admin chats** | `entities/client`, `entities/message`, `widgets/chat-list`, `widgets/messages-list`, страница `/chat/[id]`. Realtime по `messages`. | Менеджер видит чаты в реальном времени. |
-| **S4. Recipes & embeddings** | `recipes` + pgvector, Jina-эмбеддинги, `search_recipes` RPC, `add-recipe` edge-функция, страница `/recipes`. | Семантический поиск работает. |
-| **S5. Recipe-flow & callbacks** | `recipe-flow.ts`: semantic ≥ 0.88 → fallback LLM, structured output, recipe/clarify-keyboards, `recipe_ratings`, `client_favorite_recipes`. | Полноценная подача рецептов. |
+| **S4. Recipes & embeddings** | `recipes` + pgvector, Gemini-эмбеддинги, `search_recipes` RPC, `add-recipe` edge-функция, страница `/recipes`. | Семантический поиск работает. |
+| **S5. Recipe-flow & callbacks** | `recipe-reply.ts`: semantic ≥ 0.80 → fallback LLM, structured output, recipe/clarify-keyboards, `recipe_ratings`, `client_favorite_recipes`. | Полноценная подача рецептов. |
 | **S6. Escalation** | `escalation_status`, `admin-reply` edge-функция, `assign-manager`, `chat-reply`, `escalation` features, аудит `messages_managers`. | Эскалация бот↔менеджер↔бот. |
 | **S7. UX polish** | Команды `/preferences`, `/save`, `/saved`, `/list`, `/random`, `/week`. Reply-keyboard. Rate-limit. Casual-detection. Idempotency. | Финальный продуктовый функционал бота. |
 | **S8. Admin polish** | `/history` + CSV-экспорт, `/stats`, `/admin` (роли), `client-tags`, `chat-settings`, заметки (`note`), recipe-picker, звуковые алерты. | Готов к передаче в эксплуатацию. |
@@ -424,7 +425,7 @@ vibecoding/
 
 ## 13. Открытые вопросы / риски
 
-1. **Стоимость DeepSeek + Jina** при росте трафика — не оценена. Мониторинг через `messages.total_tokens`.
+1. **Стоимость DeepSeek + Gemini** при росте трафика — не оценена. Мониторинг через `messages.total_tokens` (у Gemini free-tier лимит ~1000 запросов/день).
 2. **Дедупликация рецептов**: текущая стратегия — UNIQUE на нормализованный title. Возможны коллизии для разных вариантов одного блюда.
 3. **Holiday/peak load**: rate-limit 20/час может оказаться слишком строгим/мягким — требует данных эксплуатации.
 4. **Multi-tenancy**: текущая схема предполагает одного бота / одну компанию. Для масштабирования потребуется добавить `tenant_id` ко всем таблицам.

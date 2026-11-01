@@ -92,7 +92,7 @@ table(recipes) {
   ingredients : text
   instructions : text
   category : text
-  embedding : vector(1024)  -- BGE-M3
+  embedding : vector(1024)  -- Gemini gemini-embedding-001
   created_at : timestamptz
 }
 

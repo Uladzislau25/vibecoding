@@ -20,7 +20,7 @@ System_Boundary(chefbot, "ChefBot") {
 
 System_Ext(telegram, "Telegram Bot API")
 System_Ext(deepseek, "DeepSeek API", "LLM")
-System_Ext(jina, "Jina Embeddings", "BGE-M3")
+System_Ext(gemini, "Google Gemini Embeddings", "gemini-embedding-001 (1024-d)")
 
 Rel(client, telegram, "Сообщения / кнопки")
 Rel(telegram, fn_webhook, "POST /telegram-webhook", "HTTPS")
@@ -36,10 +36,10 @@ Rel(admin_app, fn_add_recipe, "POST (добавить рецепт)", "HTTPS")
 
 Rel(fn_webhook, db, "CRUD: clients, messages, recipes, search_recipes()", "service_role")
 Rel(fn_webhook, deepseek, "chat completions", "HTTPS")
-Rel(fn_webhook, jina, "embeddings (query/passage)", "HTTPS")
+Rel(fn_webhook, gemini, "embeddings (query/passage)", "HTTPS")
 Rel(fn_admin_reply, db, "insert message, update escalation_status", "service_role")
 Rel(fn_add_recipe, db, "insert recipe + embedding", "service_role")
-Rel(fn_add_recipe, jina, "embeddings", "HTTPS")
+Rel(fn_add_recipe, gemini, "embeddings", "HTTPS")
 
 Rel(db, realtime, "Logical replication", "publication")
 

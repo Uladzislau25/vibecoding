@@ -4,8 +4,8 @@ title ChefBot — Обработка входящего сообщения от 
 actor "Клиент" as User
 participant "Telegram Bot API" as TG
 participant "telegram-webhook\n(Edge Function)" as WH
-participant "_handlers / _lib" as Handlers
-participant "Jina Embeddings" as Jina
+participant "features / api / lib" as Handlers
+participant "Gemini Embeddings" as Emb
 participant "DeepSeek LLM" as DS
 database "Supabase Postgres" as DB
 participant "Supabase Realtime" as RT
@@ -81,11 +81,12 @@ end
 WH -> Handlers: processRecipeRequest(...)
 Handlers -> TG: sendChatAction("typing")
 
-Handlers -> Jina: createEmbedding(contextQuery, "query")
+Handlers -> Emb: createEmbedding(contextQuery, "query")
+note right of Emb: best-effort: при сбое Gemini\nпоиск пропускается → сразу LLM
 Handlers -> DB: rpc search_recipes(emb, query_text, 1)
 DB --> Handlers: matches[]
 
-alt similarity >= 0.88
+alt similarity >= 0.80
     Handlers -> Handlers: reply = recipe.description
 else miss
     Handlers -> DS: chat completions\n(structured output)
@@ -98,11 +99,12 @@ else miss
         RT -> Mgr: realtime "clients" → подсветка эскалации
         Handlers -> TG: sendMessage(ESCALATION_MESSAGE)
     else can_help
-        Handlers -> Jina: createEmbedding(passage, "passage")
-        Handlers -> DB: insert recipes (+ embedding)
-        alt UNIQUE conflict (23505)
-            Handlers -> DB: select existing recipe by title
+        Handlers -> Emb: createEmbedding(passage, "passage")
+        Handlers -> DB: rpc insert_recipe_dedup(...)\n(advisory-lock + семантический дедуп, порог 0.95)
+        alt reused (похожий рецепт уже есть)
+            Handlers -> DB: select существующий рецепт по recipe_id
         end
+        note right of Handlers: если Gemini недоступен —\nрецепт отправляется без сохранения/дедупа
         Handlers -> TG: sendMessage(reply, recipeKeyboard 👍/👎/⭐)
     end
 end

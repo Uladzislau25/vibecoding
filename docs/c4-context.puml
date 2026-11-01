@@ -11,7 +11,7 @@ System(chefbot, "ChefBot", "Telegram-бот + админ-панель: подб�
 
 System_Ext(telegram, "Telegram Bot API", "Доставка сообщений и callback'ов")
 System_Ext(deepseek, "DeepSeek API", "LLM для генерации рецептов (deepseek-flash / v4-pro)")
-System_Ext(jina, "Jina Embeddings API", "BGE-M3 эмбеддинги для семантического поиска рецептов")
+System_Ext(gemini, "Google Gemini Embeddings API", "gemini-embedding-001 (1024-d) эмбеддинги для семантического поиска рецептов")
 System_Ext(google, "Google OAuth", "Аутентификация менеджеров в админ-панели")
 
 Rel(client, telegram, "Пишет сообщения, нажимает кнопки", "HTTPS")
@@ -22,7 +22,7 @@ Rel(manager, chefbot, "Чат с клиентами, ответы, заметк�
 Rel(admin, chefbot, "Управление ролями менеджеров", "HTTPS")
 
 Rel(chefbot, deepseek, "Генерация рецептов и казуальных ответов", "HTTPS/JSON")
-Rel(chefbot, jina, "Эмбеддинги query/passage", "HTTPS/JSON")
+Rel(chefbot, gemini, "Эмбеддинги query/passage", "HTTPS/JSON")
 Rel(chefbot, google, "OAuth flow менеджеров", "OAuth 2.0")
 
 SHOW_LEGEND()

@@ -16,7 +16,7 @@ package "telegram-webhook" {
         - rateLimit(clientId): boolean
     }
 
-    package "_handlers" {
+    package "features" {
         class "commands.ts" as Commands {
             + handleStart(chatId)
             + handlePreferences(db, chatId, clientId)
@@ -32,16 +32,21 @@ package "telegram-webhook" {
             - save(clientId, recipeId)
             - clarify(chatId, payload)
         }
+        class "recipe-reply.ts" as RecipeFlow {
+            + processRecipeRequest(db, input)
+            - buildReply(db, input, sysPrompt): ReplyDraft
+            - findSimilarRecipe(db, contextQuery)  <<best-effort>>
+            - storeRecipe(db, generated, text)     <<best-effort>>
+        }
     }
 
-    package "_lib" {
-        class "recipe-flow.ts" as RecipeFlow {
-            + processRecipeRequest(db, chatId, clientId, text, settings, sysPrompt, history, contextQuery)
-            + saveBotReply(db, clientId, text, recipeId?, usage?)
-            - escalate(clientId)
-        }
+    package "api" {
         class "deepseek.ts" as DeepSeek {
             + generateRecipe(model, sysPrompt, history, text, temp, maxTokens): GeneratedRecipe
+        }
+        class "*.repo.ts" as Repos {
+            + searchSimilarRecipes / insertRecipeWithDedup / getRecipeContent
+            + insertBotMessage / markEscalated / ...
         }
     }
 }
@@ -88,10 +93,13 @@ Index --> TextLib : detectCasual / pickRandom
 Index ..> Types
 
 RecipeFlow --> DeepSeek : generateRecipe()
+RecipeFlow --> Repos : search / dedup / insertBotMessage
 RecipeFlow --> Embeddings : createEmbedding()
 RecipeFlow --> Telegram : sendMessage(.., recipeKeyboard|clarifyKeyboard)
 RecipeFlow --> TextLib : stripMarkdown / extractServings
 RecipeFlow ..> Types
+Repos --> Supabase
+Repos ..> Types
 
 Callback --> Supabase
 Callback --> Telegram
@@ -99,20 +107,22 @@ Commands --> Supabase
 Commands --> Telegram
 
 DeepSeek ..> Types
-Embeddings --> "Jina API" as Jina <<external>>
+Embeddings --> "Gemini Embeddings API" as Gemini <<external>>
 DeepSeek --> "DeepSeek API" as DS <<external>>
 Telegram --> "Telegram Bot API" as TG <<external>>
 Supabase --> "Postgres + RLS" as PG <<external>>
 
 note right of RecipeFlow
   Алгоритм:
-  1. semantic search (similarity >= 0.88) — отдать готовый рецепт
+  1. semantic search (similarity >= 0.80) — отдать готовый рецепт
   2. иначе — LLM с structured output:
      • need_clarification → clarifyKeyboard
      • !can_help          → escalation_status='escalated'
-     • can_help           → INSERT recipe + embedding,
-                            recipeKeyboard (👍/👎/⭐)
+     • can_help           → insert_recipe_dedup (семантический
+                            дедуп, порог 0.95) + recipeKeyboard (👍/👎/⭐)
   3. saveBotReply со счётом токенов
+  Эмбеддинги best-effort: при сбое Gemini поиск и
+  дедуп пропускаются, рецепт всё равно генерируется.
 end note
 
 @enduml
