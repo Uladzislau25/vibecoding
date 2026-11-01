@@ -80,7 +80,20 @@ export default function PushToggle() {
     }
   }
 
-  if (state === "unsupported") return null;
+  if (state === "unsupported") {
+    // Keep the control visible (don't silently vanish). On iOS, push is only
+    // available in the installed PWA — hint the user to add it to the home screen.
+    return (
+      <button
+        type="button"
+        disabled
+        title="Уведомления работают только в установленном приложении. Добавьте ChefBot на главный экран."
+        className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed"
+      >
+        🔕
+      </button>
+    );
+  }
 
   const on = state === "on";
   return (
