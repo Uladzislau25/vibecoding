@@ -1,5 +1,5 @@
 // ChefBot PWA service worker: minimal app-shell + offline fallback for navigations.
-const CACHE = "chefbot-v1";
+const CACHE = "chefbot-v2";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {

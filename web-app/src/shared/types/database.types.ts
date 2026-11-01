@@ -80,6 +80,10 @@ export type Database = {
         Args: { p_endpoint: string; p_p256dh: string; p_auth: string };
         Returns: undefined;
       };
+      clear_my_web_history: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

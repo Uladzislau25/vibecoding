@@ -27,8 +27,25 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  async function clearHistory() {
+    if (clearing) return;
+    if (!confirm("Очистить всю переписку?")) return;
+    setClearing(true);
+    try {
+      const supabase = getSupabaseBrowser();
+      const { error: rpcError } = await supabase.rpc("clear_my_web_history", {});
+      if (rpcError) throw rpcError;
+      setMessages([GREETING]);
+    } catch {
+      setError("Не удалось очистить историю.");
+    } finally {
+      setClearing(false);
+    }
+  }
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,6 +93,17 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+        {messages.length > 1 && (
+          <button
+            type="button"
+            onClick={clearHistory}
+            disabled={clearing}
+            className="self-center text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline underline-offset-2 disabled:opacity-50"
+          >
+            {clearing ? "Очищаю…" : "Очистить историю"}
+          </button>
+        )}
+
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
             <div
