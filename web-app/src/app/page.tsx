@@ -2,6 +2,7 @@ import { createSupabaseServer } from "@/shared/api/supabase-server";
 import { logout } from "@/features/auth/api/actions";
 import ChatClient, { type ChatMessage } from "@/features/chat/ui/ChatClient";
 import PushToggle from "@/features/pwa/PushToggle";
+import ThemeToggle from "@/features/theme/ThemeToggle";
 
 export default async function HomePage() {
   const supabase = await createSupabaseServer();
@@ -37,12 +38,13 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-white dark:bg-gray-900 sm:border-x border-gray-200 dark:border-gray-800">
-      <header className="shrink-0 flex items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur sticky top-0 z-10">
+      <header className="shrink-0 flex items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <span className="text-lg">🍳</span>
           <span className="font-semibold text-gray-900 dark:text-gray-100">ChefBot</span>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <PushToggle />
           <form action={logout}>
             <button

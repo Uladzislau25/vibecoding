@@ -75,7 +75,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
             <div
