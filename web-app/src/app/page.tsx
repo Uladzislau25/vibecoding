@@ -5,19 +5,35 @@ import PushToggle from "@/features/pwa/PushToggle";
 
 export default async function HomePage() {
   const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // RLS (messages_web_self) restricts this to the current user's own messages.
-  const { data } = await supabase
-    .from("messages")
-    .select("text, sender_type, recipe_id, created_at")
-    .order("created_at", { ascending: true })
-    .limit(50);
+  // Scope history explicitly to this user's own web client. We must NOT rely on
+  // RLS alone: an admin/manager Google account has broad messages_all access and
+  // would otherwise see every client's messages mixed together.
+  let initialMessages: ChatMessage[] = [];
+  if (user) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .eq("platform", "web")
+      .maybeSingle();
 
-  const initialMessages: ChatMessage[] = (data ?? []).map((m) => ({
-    role: m.sender_type === "bot" ? "bot" : "user",
-    text: m.text,
-    recipeId: m.recipe_id,
-  }));
+    if (client) {
+      const { data } = await supabase
+        .from("messages")
+        .select("text, sender_type, recipe_id, created_at")
+        .eq("client_id", client.id)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+      initialMessages = (data ?? []).map((m) => ({
+        role: m.sender_type === "bot" ? "bot" : "user",
+        text: m.text,
+        recipeId: m.recipe_id,
+      }));
+    }
+  }
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-white dark:bg-gray-900 sm:border-x border-gray-200 dark:border-gray-800">
