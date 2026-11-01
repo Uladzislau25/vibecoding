@@ -15,3 +15,6 @@ node_modules/
 
 # DS files
 .DS_Store
+
+# Rendered PlantUML diagrams (sources are the .puml files)
+docs/png/
