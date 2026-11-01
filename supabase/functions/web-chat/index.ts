@@ -17,6 +17,15 @@ import { FAREWELL_REPLIES, GRATITUDE_REPLIES, GREETING_REPLIES } from "../telegr
 
 const admin = createAdminClient();
 
+// Web-only persona tweak: the PWA chat reads as a conversation, so make the
+// clarifying questions warmer and chattier than the terse Telegram ones. Only
+// the `question` field is affected — the recipe JSON schema stays strict.
+const WEB_CHATTY_CLARIFY =
+  "\n\nЭто чат в приложении, а не Telegram. Когда уточняешь детали (need_clarification), " +
+  "пиши вопрос тепло и по-дружески, на «ты», с лёгким эмодзи и короткой живой фразой — " +
+  "будто болтаешь с другом на кухне (например: «О, отличная идея! 😋 А какой суп больше хочется —…»). " +
+  "Это касается только поля question; остальной JSON и формат рецепта не меняй.";
+
 type WebUserMeta = { firstName: string | null; username: string | null };
 
 // Find (or lazily create) the clients row backing this web user.
@@ -103,7 +112,7 @@ Deno.serve(async (req) => {
       await gatherChatContext(admin, clientId);
 
     const servings = extractServings(text);
-    const prompt = withServings(systemPrompt, servings);
+    const prompt = withServings(systemPrompt, servings) + WEB_CHATTY_CLARIFY;
 
     const draft = await buildRecipeReply(admin, {
       userText: text,
