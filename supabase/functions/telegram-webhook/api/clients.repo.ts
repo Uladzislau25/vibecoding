@@ -57,6 +57,11 @@ export async function setSetupState(db: any, clientId: number, state: string): P
   await db.from("clients").update({ setup_state: state }).eq("id", clientId);
 }
 
+export async function setSubscription(db: any, clientId: number, subscribed: boolean): Promise<void> {
+  const { error } = await db.from("clients").update({ subscribed }).eq("id", clientId);
+  if (error) console.error("Failed to update subscription:", error);
+}
+
 export async function markEscalated(db: any, clientId: number): Promise<void> {
   await db
     .from("clients")

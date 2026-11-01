@@ -405,3 +405,10 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/add-recipe/deno.json"
 entrypoint = "./functions/add-recipe/index.ts"
+
+[functions.cron-recipe]
+enabled = true
+# Called by an external scheduler with a shared secret (x-cron-secret), not a JWT.
+verify_jwt = false
+import_map = "./functions/cron-recipe/deno.json"
+entrypoint = "./functions/cron-recipe/index.ts"

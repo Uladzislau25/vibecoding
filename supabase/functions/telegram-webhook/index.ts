@@ -16,6 +16,8 @@ import {
   handleSave,
   handleSaved,
   handleStart,
+  handleSubscribe,
+  handleUnsubscribe,
   handleWeek,
 } from "./features/commands.ts";
 import { handleCallbackQuery } from "./features/callback.ts";
@@ -130,6 +132,9 @@ async function dispatchCommand(text: string, chatId: number, clientId: number): 
     case "/list":        await handleList(db, chatId, clientId);        return true;
     case "/random":      await handleRandom(db, chatId, clientId);      return true;
     case "/week":        await handleWeek(db, chatId, clientId);        return true;
+    case "/subscribe":   await handleSubscribe(db, chatId, clientId);   return true;
+    case "/unsubscribe":
+    case "/stop":        await handleUnsubscribe(db, chatId, clientId); return true;
     default:             return false;
   }
 }

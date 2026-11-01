@@ -2,7 +2,7 @@
 import { sendMessage, sendTyping, recipeKeyboard } from "../../_shared/api/telegram.ts";
 import { generateWeekPlan } from "../api/deepseek.ts";
 import { insertBotMessage, getLastBotRecipeId } from "../api/messages.repo.ts";
-import { setSetupState } from "../api/clients.repo.ts";
+import { setSetupState, setSubscription } from "../api/clients.repo.ts";
 import { getDietaryNotes } from "../api/preferences.repo.ts";
 import {
   addFavorite,
@@ -27,7 +27,9 @@ export async function handleStart(chatId: number): Promise<void> {
       "/save — сохранить последний рецепт ⭐\n" +
       "/saved — мои сохранённые рецепты\n" +
       "/list — список покупок для последнего рецепта 🛒\n" +
-      "/preferences — мои пищевые предпочтения",
+      "/preferences — мои пищевые предпочтения\n" +
+      "/subscribe — подписаться на «рецепт дня» 📬\n" +
+      "/unsubscribe — отписаться от рассылки 🔕",
   );
 }
 
@@ -101,6 +103,24 @@ export async function handleRandom(db: any, chatId: number, clientId: number): P
   const reply = formatRecipe(recipe);
   await sendMessage(chatId, reply, recipeKeyboard(recipe.id));
   await insertBotMessage(db, clientId, reply, recipe.id);
+}
+
+export async function handleSubscribe(db: any, chatId: number, clientId: number): Promise<void> {
+  await setSubscription(db, clientId, true);
+  const reply =
+    "✅ Вы подписаны на «рецепт дня» 📬\n\n" +
+    "Раз в несколько дней я буду присылать новый рецепт. Чтобы отписаться — /unsubscribe.";
+  await sendMessage(chatId, reply);
+  await insertBotMessage(db, clientId, reply);
+}
+
+export async function handleUnsubscribe(db: any, chatId: number, clientId: number): Promise<void> {
+  await setSubscription(db, clientId, false);
+  const reply =
+    "🔕 Вы отписались от рассылки «рецепт дня».\n\n" +
+    "Рецепты по запросу по-прежнему работают. Вернуться к рассылке — /subscribe.";
+  await sendMessage(chatId, reply);
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleWeek(db: any, chatId: number, clientId: number): Promise<void> {

@@ -100,6 +100,7 @@ export type Database = {
           id: number
           last_name: string | null
           status: string
+          subscribed: boolean
           user_id: number
           username: string | null
         }
@@ -110,6 +111,7 @@ export type Database = {
           id?: never
           last_name?: string | null
           status?: string
+          subscribed?: boolean
           user_id: number
           username?: string | null
         }
@@ -120,6 +122,7 @@ export type Database = {
           id?: never
           last_name?: string | null
           status?: string
+          subscribed?: boolean
           user_id?: number
           username?: string | null
         }

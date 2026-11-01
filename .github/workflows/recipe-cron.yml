@@ -1,0 +1,26 @@
+name: Recipe cron (keep-alive)
+
+# Dergает edge-функцию cron-recipe раз в ~3 дня: она пишет новый рецепт в БД
+# (не давая free-tier проекту уснуть) и рассылает его активным пользователям бота.
+on:
+  schedule:
+    # 09:00 UTC по дням 3, 6, 9, ... 30 каждого месяца (максимальный интервал — ~3 дня).
+    - cron: "0 9 */3 * *"
+  workflow_dispatch: {} # позволяет запустить вручную из вкладки Actions
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron-recipe function
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/cron-recipe" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
