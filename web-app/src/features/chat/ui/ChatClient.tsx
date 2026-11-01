@@ -29,7 +29,6 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rated, setRated] = useState<Record<number, number>>({});
   const [saved, setSaved] = useState<Set<number>>(new Set());
@@ -118,23 +117,6 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     await getSupabaseBrowser().rpc("save_favorite", { p_recipe_id: recipeId, p_title: title });
   }
 
-  async function clearHistory() {
-    if (clearing) return;
-    if (!confirm("Очистить всю переписку?")) return;
-    setClearing(true);
-    try {
-      const { error: rpcError } = await getSupabaseBrowser().rpc("clear_my_web_history", {});
-      if (rpcError) throw rpcError;
-      setMessages([GREETING]);
-      setRated({});
-      setSaved(new Set());
-    } catch {
-      setError("Не удалось очистить историю.");
-    } finally {
-      setClearing(false);
-    }
-  }
-
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     send(input);
@@ -145,17 +127,6 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        {messages.length > 1 && (
-          <button
-            type="button"
-            onClick={clearHistory}
-            disabled={clearing}
-            className="self-center text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline underline-offset-2 disabled:opacity-50"
-          >
-            {clearing ? "Очищаю…" : "Очистить историю"}
-          </button>
-        )}
-
         {messages.map((m, i) => {
           const recipeId = m.recipeId ?? null;
           return (

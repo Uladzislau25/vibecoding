@@ -1,8 +1,6 @@
 import { createSupabaseServer } from "@/shared/api/supabase-server";
-import { logout } from "@/features/auth/api/actions";
 import ChatClient, { type ChatMessage } from "@/features/chat/ui/ChatClient";
-import PushToggle from "@/features/pwa/PushToggle";
-import ThemeToggle from "@/features/theme/ThemeToggle";
+import HeaderMenu from "@/features/chat/ui/HeaderMenu";
 
 export default async function HomePage() {
   const supabase = await createSupabaseServer();
@@ -43,18 +41,7 @@ export default async function HomePage() {
           <span className="text-lg">🍳</span>
           <span className="font-semibold text-gray-900 dark:text-gray-100">ChefBot</span>
         </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <PushToggle />
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Выйти
-            </button>
-          </form>
-        </div>
+        <HeaderMenu />
       </header>
 
       <ChatClient initialMessages={initialMessages} />
