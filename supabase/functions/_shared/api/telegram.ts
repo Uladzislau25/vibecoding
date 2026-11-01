@@ -5,10 +5,21 @@ export const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: "🎲 Случайный рецепт" }, { text: "⭐ Избранное" }],
     [{ text: "🛒 Список покупок" }, { text: "⚙️ Предпочтения" }],
+    [{ text: "📬 Рассылка" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
 };
+
+export function subscriptionKeyboard(subscribed: boolean) {
+  return {
+    inline_keyboard: [[
+      subscribed
+        ? { text: "🔕 Отписаться от рассылки", callback_data: "sub:off" }
+        : { text: "📬 Подписаться на рецепт дня", callback_data: "sub:on" },
+    ]],
+  };
+}
 
 export function recipeKeyboard(recipeId: number) {
   return {

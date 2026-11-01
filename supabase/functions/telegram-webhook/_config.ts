@@ -34,6 +34,7 @@ export const BUTTON_COMMAND_MAP: Record<string, string> = {
   "⭐ Избранное": "/saved",
   "🛒 Список покупок": "/list",
   "⚙️ Предпочтения": "/preferences",
+  "📬 Рассылка": "/subscription",
 };
 
 export const RATE_LIMIT_REPLY =

@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
-import { sendMessage, sendTyping, recipeKeyboard } from "../../_shared/api/telegram.ts";
+import { sendMessage, sendTyping, recipeKeyboard, subscriptionKeyboard } from "../../_shared/api/telegram.ts";
 import { generateWeekPlan } from "../api/deepseek.ts";
 import { insertBotMessage, getLastBotRecipeId } from "../api/messages.repo.ts";
-import { setSetupState, setSubscription } from "../api/clients.repo.ts";
+import { getSubscription, setSetupState, setSubscription } from "../api/clients.repo.ts";
 import { getDietaryNotes } from "../api/preferences.repo.ts";
 import {
   addFavorite,
@@ -103,6 +103,15 @@ export async function handleRandom(db: any, chatId: number, clientId: number): P
   const reply = formatRecipe(recipe);
   await sendMessage(chatId, reply, recipeKeyboard(recipe.id));
   await insertBotMessage(db, clientId, reply, recipe.id);
+}
+
+export async function handleSubscription(db: any, chatId: number, clientId: number): Promise<void> {
+  const subscribed = await getSubscription(db, clientId);
+  const reply = subscribed
+    ? "📬 Вы подписаны на «рецепт дня» — присылаю новый рецепт раз в несколько дней."
+    : "🔕 Рассылка «рецепт дня» выключена. Подпишитесь, чтобы получать новый рецепт раз в несколько дней.";
+  await sendMessage(chatId, reply, subscriptionKeyboard(subscribed));
+  await insertBotMessage(db, clientId, reply);
 }
 
 export async function handleSubscribe(db: any, chatId: number, clientId: number): Promise<void> {

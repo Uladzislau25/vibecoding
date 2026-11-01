@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
-import { answerCallback, removeKeyboard, sendMessage } from "../../_shared/api/telegram.ts";
-import { findClientByChat } from "../api/clients.repo.ts";
+import { answerCallback, removeKeyboard, sendMessage, subscriptionKeyboard, tgPost } from "../../_shared/api/telegram.ts";
+import { findClientByChat, setSubscription } from "../api/clients.repo.ts";
 import { addFavorite } from "../api/favorites.repo.ts";
 import { getRecipeTitle } from "../api/recipes.repo.ts";
 import { insertClientMessage } from "../api/messages.repo.ts";
@@ -34,8 +34,36 @@ export async function handleCallbackQuery(db: any, query: CallbackQuery): Promis
     await handleClarify(db, queryId, chatId, messageId, client.id, data);
     return;
   }
+  if (data.startsWith("sub:")) {
+    await handleSubscriptionToggle(db, queryId, chatId, messageId, client.id, data);
+    return;
+  }
 
   await answerCallback(queryId);
+}
+
+async function handleSubscriptionToggle(
+  db: any,
+  queryId: string,
+  chatId: number,
+  messageId: number,
+  clientId: number,
+  data: string,
+): Promise<void> {
+  const subscribed = data === "sub:on";
+  await setSubscription(db, clientId, subscribed);
+
+  // Flip the inline button in place so it reflects the new state.
+  await tgPost("editMessageReplyMarkup", {
+    chat_id: chatId,
+    message_id: messageId,
+    reply_markup: subscriptionKeyboard(subscribed),
+  });
+
+  await answerCallback(
+    queryId,
+    subscribed ? "Подписка включена 📬" : "Подписка отключена 🔕",
+  );
 }
 
 async function handleRate(

@@ -62,6 +62,11 @@ export async function setSubscription(db: any, clientId: number, subscribed: boo
   if (error) console.error("Failed to update subscription:", error);
 }
 
+export async function getSubscription(db: any, clientId: number): Promise<boolean> {
+  const { data } = await db.from("clients").select("subscribed").eq("id", clientId).maybeSingle();
+  return data?.subscribed === true;
+}
+
 export async function markEscalated(db: any, clientId: number): Promise<void> {
   await db
     .from("clients")
