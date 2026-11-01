@@ -1,27 +1,33 @@
-const HF_API_KEY = Deno.env.get("HF_API_KEY")!;
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
-const BGE_M3_ENDPOINT =
-  "https://router.huggingface.co/hf-inference/models/BAAI/bge-m3/pipeline/feature-extraction";
+const GEMINI_EMBED_ENDPOINT =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 
 const EMBEDDING_DIM = 1024;
 
 export type EmbeddingKind = "query" | "passage";
 
-function applyPrefix(text: string, kind: EmbeddingKind): string {
-  return `${kind}: ${text}`;
+// Gemini uses task types instead of BGE-M3's "query:"/"passage:" text prefixes.
+const TASK_TYPE: Record<EmbeddingKind, string> = {
+  query: "RETRIEVAL_QUERY",
+  passage: "RETRIEVAL_DOCUMENT",
+};
+
+function extractValues(payload: unknown): number[] {
+  const values = (payload as { embedding?: { values?: unknown } })?.embedding?.values;
+  if (Array.isArray(values) && typeof values[0] === "number") {
+    return values as number[];
+  }
+  throw new Error("Unexpected embedding response shape from Gemini");
 }
 
-function flattenEmbedding(payload: unknown): number[] {
-  if (Array.isArray(payload) && typeof payload[0] === "number") {
-    return payload as number[];
-  }
-  if (Array.isArray(payload) && Array.isArray(payload[0])) {
-    const inner = payload[0] as unknown[];
-    if (typeof inner[0] === "number") {
-      return inner as number[];
-    }
-  }
-  throw new Error("Unexpected embedding response shape from BGE-M3");
+// Gemini recommends L2-normalizing when outputDimensionality < 3072.
+function normalize(vec: number[]): number[] {
+  let sumSq = 0;
+  for (const v of vec) sumSq += v * v;
+  const norm = Math.sqrt(sumSq);
+  if (norm === 0) return vec;
+  return vec.map((v) => v / norm);
 }
 
 const MAX_ATTEMPTS = 3;
@@ -30,24 +36,26 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchEmbeddingOnce(input: string): Promise<number[]> {
-  const res = await fetch(BGE_M3_ENDPOINT, {
+async function fetchEmbeddingOnce(text: string, kind: EmbeddingKind): Promise<number[]> {
+  const res = await fetch(`${GEMINI_EMBED_ENDPOINT}?key=${GEMINI_API_KEY}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${HF_API_KEY}`,
-    },
-    body: JSON.stringify({ inputs: input }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "models/gemini-embedding-001",
+      content: { parts: [{ text }] },
+      taskType: TASK_TYPE[kind],
+      outputDimensionality: EMBEDDING_DIM,
+    }),
   });
 
   if (!res.ok) {
     throw new Error(
-      `BGE-M3 embeddings error: ${res.status} ${await res.text()}`,
+      `Gemini embeddings error: ${res.status} ${await res.text()}`,
     );
   }
 
   const body = await res.json();
-  const embedding = flattenEmbedding(body);
+  const embedding = normalize(extractValues(body));
 
   if (embedding.length !== EMBEDDING_DIM) {
     throw new Error(
@@ -62,12 +70,10 @@ export async function createEmbedding(
   text: string,
   kind: EmbeddingKind,
 ): Promise<number[]> {
-  const input = applyPrefix(text, kind);
-
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      return await fetchEmbeddingOnce(input);
+      return await fetchEmbeddingOnce(text, kind);
     } catch (err) {
       lastError = err;
       if (attempt < MAX_ATTEMPTS) {
@@ -77,5 +83,5 @@ export async function createEmbedding(
   }
   throw lastError instanceof Error
     ? lastError
-    : new Error(`BGE-M3 embeddings failed after ${MAX_ATTEMPTS} attempts`);
+    : new Error(`Gemini embeddings failed after ${MAX_ATTEMPTS} attempts`);
 }

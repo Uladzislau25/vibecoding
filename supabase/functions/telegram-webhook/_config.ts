@@ -45,4 +45,4 @@ export const ESCALATION_MESSAGE =
 export const RECIPE_FAILURE_REPLY =
   "Извините, сейчас не получается подобрать рецепт. Попробуйте, пожалуйста, чуть позже.";
 
-export const RECIPE_SIMILARITY_THRESHOLD = 0.88;
+export const RECIPE_SIMILARITY_THRESHOLD = 0.8;
