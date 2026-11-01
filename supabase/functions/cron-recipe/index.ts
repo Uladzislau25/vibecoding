@@ -14,6 +14,7 @@ import { createEmbedding } from "../_shared/embeddings.ts";
 import { corsHeaders, jsonResponse } from "../_shared/lib/http.ts";
 import { stripMarkdown } from "../_shared/lib/text.ts";
 import { recipeKeyboard, sendMessage } from "../_shared/api/telegram.ts";
+import { configureWebPush, sendPush } from "../_shared/web-push.ts";
 import { generateRecipe, RECIPE_CATEGORIES } from "../telegram-webhook/api/deepseek.ts";
 import {
   getRecipeContent,
@@ -128,6 +129,33 @@ async function broadcast(text: string, recipeId: number | null): Promise<number>
   return sent;
 }
 
+// Web push to PWA users. Best-effort: dead subscriptions (410/404) are pruned.
+async function broadcastWebPush(title: string): Promise<number> {
+  if (!configureWebPush()) return 0;
+
+  const { data, error } = await admin
+    .from("push_subscriptions")
+    .select("endpoint, p256dh, auth");
+  if (error) {
+    console.error("Failed to load push subscriptions:", error);
+    return 0;
+  }
+
+  const subs = (data ?? []) as { endpoint: string; p256dh: string; auth: string }[];
+  const payload = { title: "Рецепт дня 🍳", body: title, url: "/" };
+  let sent = 0;
+
+  for (const sub of subs) {
+    const result = await sendPush(sub, payload);
+    if (result === "ok") sent++;
+    else if (result === "gone") {
+      await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+    }
+  }
+
+  return sent;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -168,6 +196,7 @@ Deno.serve(async (req) => {
     const stored = await storeRecipe(generated, generatedText);
     const text = stripMarkdown(stored.text);
     const sent = await broadcast(text, stored.recipeId);
+    const pushSent = await broadcastWebPush(generated.title);
 
     return jsonResponse({
       ok: true,
@@ -175,6 +204,7 @@ Deno.serve(async (req) => {
       recipe_saved: stored.recipeId !== null,
       recipe_id: stored.recipeId,
       broadcast_sent: sent,
+      push_sent: pushSent,
     });
   } catch (err) {
     console.error("cron-recipe error:", err);

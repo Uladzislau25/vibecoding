@@ -51,9 +51,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      push_subscriptions: {
+        Row: {
+          id: number;
+          client_id: number;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          created_at: string;
+        };
+        Insert: {
+          client_id: number;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+        };
+        Update: {
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      save_push_subscription: {
+        Args: { p_endpoint: string; p_p256dh: string; p_auth: string };
+        Returns: undefined;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
