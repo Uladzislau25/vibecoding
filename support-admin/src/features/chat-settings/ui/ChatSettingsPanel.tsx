@@ -29,19 +29,36 @@ export default function ChatSettingsPanel({ clientId, initialSettings, initialSt
   const [savingSettings, startSaveSettings] = useTransition();
   const [savingStatus, startSaveStatus] = useTransition();
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   function commit(next: ChatSettingsInput) {
+    const prev = settings;
     setSettings(next);
+    setError(null);
     startSaveSettings(async () => {
-      await updateChatSettings(clientId, next);
-      setSavedAt(Date.now());
+      try {
+        await updateChatSettings(clientId, next);
+        setSavedAt(Date.now());
+      } catch (e) {
+        setSettings(prev); // откатываем оптимистичное обновление
+        setError(e instanceof Error ? e.message : "Не удалось сохранить настройки");
+      }
     });
   }
 
   function toggleStatus() {
+    const prev = status;
     const next = status === "open" ? "closed" : "open";
     setStatus(next);
-    startSaveStatus(async () => { await updateChatStatus(clientId, next); });
+    setError(null);
+    startSaveStatus(async () => {
+      try {
+        await updateChatStatus(clientId, next);
+      } catch (e) {
+        setStatus(prev); // откатываем оптимистичное обновление
+        setError(e instanceof Error ? e.message : "Не удалось изменить статус чата");
+      }
+    });
   }
 
   return (
@@ -53,7 +70,8 @@ export default function ChatSettingsPanel({ clientId, initialSettings, initialSt
           </svg>
           Настройки чата
           {savingSettings && <span className="text-xs text-gray-400 dark:text-gray-500">сохранение…</span>}
-          {!savingSettings && savedAt && <span className="text-xs text-green-600">сохранено</span>}
+          {!savingSettings && !error && savedAt && <span className="text-xs text-green-600">сохранено</span>}
+          {error && <span className="text-xs text-red-600">{error}</span>}
         </button>
         <button type="button" onClick={toggleStatus} disabled={savingStatus} className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${status === "open" ? "border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" : "border-green-200 dark:border-green-800 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"}`}>
           {status === "open" ? "Закрыть чат" : "Открыть чат"}
