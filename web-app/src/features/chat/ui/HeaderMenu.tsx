@@ -33,7 +33,7 @@ export default function HeaderMenu() {
     if (!confirm("Очистить всю переписку?")) return;
     setClearing(true);
     try {
-      const { error } = await getSupabaseBrowser().rpc("clear_my_web_history", {});
+      const { error } = await getSupabaseBrowser().rpc("clear_my_web_history");
       if (error) throw error;
       // Reload so the chat re-renders from the (now empty) server history.
       window.location.reload();

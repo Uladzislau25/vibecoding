@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/shared/api/supabase-browser";
 import { formatRecipe, titleFromText, type RecipeRow } from "@/features/chat/lib/recipe";
+import RecipeCard from "./RecipeCard";
 import FavoritesSheet from "./FavoritesSheet";
 import PreferencesSheet from "./PreferencesSheet";
+import ShoppingListSheet from "./ShoppingListSheet";
+import BrowseSheet from "./BrowseSheet";
 
 export type DishSuggestion = { title: string; description: string };
 
@@ -27,6 +30,17 @@ const GREETING: ChatMessage = {
   text: "Привет! Я Шеф 👨‍🍳 Напишите, что хотите приготовить, или назовите блюдо — пришлю рецепт с ингредиентами, шагами и КБЖУ.",
 };
 
+function splitProducts(text: string): string[] {
+  return Array.from(
+    new Set(
+      text
+        .split(/[,\n;]+/)
+        .map((p) => p.trim().toLowerCase())
+        .filter((p) => p.length > 1 && p.length < 40),
+    ),
+  );
+}
+
 export default function ChatClient({ initialMessages }: { initialMessages: ChatMessage[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages.length > 0 ? initialMessages : [GREETING],
@@ -36,23 +50,32 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   const [error, setError] = useState<string | null>(null);
   const [rated, setRated] = useState<Record<number, number>>({});
   const [saved, setSaved] = useState<Set<number>>(new Set());
-  const [sheet, setSheet] = useState<"none" | "favorites" | "preferences">("none");
+  const [sheet, setSheet] = useState<"none" | "favorites" | "preferences" | "shopping" | "browse">("none");
   const [ingredientsMode, setIngredientsMode] = useState(false);
+  const [pantry, setPantry] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  useEffect(() => {
+    getSupabaseBrowser()
+      .from("client_pantry")
+      .select("item")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setPantry((data ?? []).map((r) => (r as { item: string }).item)));
+  }, []);
+
   function pushBot(text: string, recipeId: number | null = null, title: string | null = null) {
     setMessages((prev) => [...prev, { role: "bot", text, recipeId, title }]);
   }
 
-  async function send(text: string, opts?: { mode?: "suggest" }) {
+  async function send(text: string, opts?: { mode?: "suggest" | "weekplan" }) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
 
-    const suggestMode = opts?.mode === "suggest";
+    const mode = opts?.mode;
     setInput("");
     setError(null);
     setIngredientsMode(false);
@@ -62,7 +85,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     try {
       const supabase = getSupabaseBrowser();
       const { data, error: fnError } = await supabase.functions.invoke("web-chat", {
-        body: suggestMode ? { text: trimmed, mode: "suggest" } : { text: trimmed },
+        body: mode ? { text: trimmed, mode } : { text: trimmed },
       });
       if (fnError) throw fnError;
 
@@ -77,11 +100,17 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
           products: (data.products as string) ?? null,
         },
       ]);
+
+      if (mode === "suggest") void rememberPantry(trimmed);
     } catch {
       setError("Не удалось получить ответ. Попробуйте ещё раз.");
     } finally {
       setSending(false);
     }
+  }
+
+  function weekPlan() {
+    send("📅 План питания на неделю", { mode: "weekplan" });
   }
 
   // Entry point for "what can I cook from these products?": prime the input so
@@ -90,6 +119,29 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     if (sending) return;
     setIngredientsMode(true);
     pushBot("Перечислите продукты, которые у вас есть (через запятую) — подскажу, что из них можно приготовить 🧺");
+  }
+
+  // Open a stored recipe directly by id (favorites / catalog) instead of asking
+  // the model to regenerate it.
+  async function openRecipeById(recipeId: number) {
+    if (sending) return;
+    setSending(true);
+    setSheet("none");
+    try {
+      const { data } = await getSupabaseBrowser()
+        .from("recipes")
+        .select(RECIPE_COLS)
+        .eq("id", recipeId)
+        .maybeSingle();
+      if (data) {
+        const r = data as RecipeRow;
+        pushBot(formatRecipe(r), r.id, r.title);
+      } else {
+        pushBot("Не удалось найти этот рецепт 😕");
+      }
+    } finally {
+      setSending(false);
+    }
   }
 
   async function randomRecipe() {
@@ -114,14 +166,30 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     }
   }
 
-  async function shopping(recipeId: number) {
-    const { data } = await getSupabaseBrowser()
-      .from("recipes")
-      .select("title, ingredients")
-      .eq("id", recipeId)
-      .maybeSingle();
-    if (!data) return;
-    pushBot(`🛒 Список покупок для «${data.title}»:\n\n${data.ingredients}`);
+  async function addToShoppingList(ingredients: string[], recipeId: number | null) {
+    if (ingredients.length === 0) return;
+    await getSupabaseBrowser().rpc("add_shopping_items", {
+      p_items: ingredients,
+      p_recipe_id: recipeId ?? undefined,
+    });
+  }
+
+  async function rememberPantry(productsText: string) {
+    const items = splitProducts(productsText);
+    if (items.length === 0) return;
+    setPantry((prev) => Array.from(new Set([...items, ...prev])).slice(0, 40));
+    await Promise.all(
+      items.map((item) => getSupabaseBrowser().rpc("add_pantry_item", { p_item: item })),
+    );
+  }
+
+  async function removePantry(item: string) {
+    setPantry((prev) => prev.filter((p) => p !== item));
+    await getSupabaseBrowser().rpc("remove_pantry_item", { p_item: item });
+  }
+
+  function appendPantry(item: string) {
+    setInput((prev) => (prev.trim() ? `${prev.trim()}, ${item}` : item));
   }
 
   async function rate(recipeId: number, rating: number) {
@@ -151,15 +219,19 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
         {messages.map((m, i) => {
           const recipeId = m.recipeId ?? null;
           return (
-            <div key={i} className={m.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[85%]"}>
+            <div key={i} className={m.role === "user" ? "self-end max-w-[85%]" : "self-start max-w-[90%]"}>
               <div
                 className={
                   m.role === "user"
                     ? "rounded-2xl rounded-br-md bg-orange-600 text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
-                    : "rounded-2xl rounded-bl-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-4 py-2.5 text-sm whitespace-pre-wrap"
+                    : "rounded-2xl rounded-bl-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-4 py-2.5 text-sm"
                 }
               >
-                {m.text}
+                {m.role === "bot" && recipeId !== null ? (
+                  <RecipeCard text={m.text} onAddToList={(ings) => addToShoppingList(ings, recipeId)} />
+                ) : (
+                  <span className="whitespace-pre-wrap">{m.text}</span>
+                )}
               </div>
 
               {m.role === "bot" && m.clarify && m.clarify.length > 0 && (
@@ -228,13 +300,6 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
                   >
                     {saved.has(recipeId) ? "⭐ Сохранено" : "⭐ Сохранить"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => shopping(recipeId)}
-                    className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    🛒
-                  </button>
                 </div>
               )}
             </div>
@@ -255,7 +320,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
               <button
                 key={q}
                 type="button"
-                onClick={() => send(q)}
+                onClick={() => (q.includes("неделю") ? weekPlan() : send(q))}
                 className="text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {q}
@@ -269,12 +334,37 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
 
       {error && <div className="shrink-0 px-4 pb-1 text-center text-xs text-red-600">{error}</div>}
 
+      {ingredientsMode && pantry.length > 0 && (
+        <div className="shrink-0 flex gap-1.5 px-3 py-2 border-t border-gray-200 dark:border-gray-800 overflow-x-auto bg-white dark:bg-gray-900">
+          <span className="shrink-0 self-center text-xs text-gray-400">Кладовка:</span>
+          {pantry.map((item) => (
+            <span
+              key={item}
+              className="shrink-0 inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200"
+            >
+              <button type="button" onClick={() => appendPantry(item)} className="hover:text-orange-600">
+                {item}
+              </button>
+              <button type="button" onClick={() => removePantry(item)} aria-label="Удалить" className="text-gray-400 hover:text-red-500">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="shrink-0 flex gap-2 px-3 py-2 border-t border-gray-200 dark:border-gray-800 overflow-x-auto bg-white dark:bg-gray-900">
         <button type="button" onClick={randomRecipe} disabled={sending} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
           🎲 Случайный
         </button>
         <button type="button" onClick={startIngredientsMode} disabled={sending} className={`shrink-0 text-sm px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${ingredientsMode ? "border-orange-400 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300" : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
           🧺 Что из продуктов?
+        </button>
+        <button type="button" onClick={() => setSheet("browse")} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
+          📖 Каталог
+        </button>
+        <button type="button" onClick={() => setSheet("shopping")} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
+          🛒 Список
         </button>
         <button type="button" onClick={() => setSheet("favorites")} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
           ⭐ Избранное
@@ -311,14 +401,12 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
       </form>
 
       {sheet === "favorites" && (
-        <FavoritesSheet
-          onClose={() => setSheet("none")}
-          onPick={(title) => {
-            setSheet("none");
-            send(title);
-          }}
-        />
+        <FavoritesSheet onClose={() => setSheet("none")} onPick={(recipeId) => openRecipeById(recipeId)} />
       )}
+      {sheet === "browse" && (
+        <BrowseSheet onClose={() => setSheet("none")} onPick={(recipeId) => openRecipeById(recipeId)} />
+      )}
+      {sheet === "shopping" && <ShoppingListSheet onClose={() => setSheet("none")} />}
       {sheet === "preferences" && <PreferencesSheet onClose={() => setSheet("none")} />}
     </>
   );

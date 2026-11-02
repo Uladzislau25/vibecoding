@@ -11,12 +11,15 @@ import { detectCasual, extractServings, pickRandom, stripMarkdown } from "../_sh
 import { deriveContextQuery, gatherChatContext } from "../telegram-webhook/lib/context.ts";
 import { withServings } from "../telegram-webhook/lib/prompt.ts";
 import { buildRecipeReply } from "../telegram-webhook/features/recipe-reply.ts";
-import { suggestDishes } from "../telegram-webhook/api/deepseek.ts";
+import { generateWeekPlan, suggestDishes } from "../telegram-webhook/api/deepseek.ts";
 import { insertBotMessage, insertClientMessage } from "../telegram-webhook/api/messages.repo.ts";
 import { markEscalated } from "../telegram-webhook/api/clients.repo.ts";
 import { FAREWELL_REPLIES, GRATITUDE_REPLIES, GREETING_REPLIES } from "../telegram-webhook/_config.ts";
 
 const admin = createAdminClient();
+
+// Per-user daily cap on inbound messages to bound DeepSeek spend.
+const DAILY_MESSAGE_LIMIT = 60;
 
 // Web-only persona tweak: the PWA chat reads as a conversation, so make the
 // clarifying questions warmer and chattier than the terse Telegram ones. Only
@@ -80,7 +83,11 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => null);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text) return jsonResponse({ error: "text is required" }, 400);
-  const mode = body?.mode === "suggest" ? "suggest" : "recipe";
+  const mode = body?.mode === "suggest"
+    ? "suggest"
+    : body?.mode === "weekplan"
+    ? "weekplan"
+    : "recipe";
 
   const meta: WebUserMeta = {
     firstName:
@@ -94,6 +101,22 @@ Deno.serve(async (req) => {
   if (clientId === null) return jsonResponse({ error: "Failed to resolve account" }, 500);
 
   try {
+    // Daily quota: cap how many messages a single web user can send per day so a
+    // runaway client can't rack up DeepSeek costs. Counted before persisting the
+    // current message.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .eq("sender_type", "client")
+      .gte("created_at", since);
+    if ((count ?? 0) >= DAILY_MESSAGE_LIMIT) {
+      const reply =
+        "На сегодня достигнут лимит запросов 🙏 Возвращайтесь завтра — продолжим готовить!";
+      return jsonResponse({ text: reply, recipeId: null, clarifyOptions: [], suggestions: [], escalated: false });
+    }
+
     // Persist the user's message first so it is part of the gathered history.
     await insertClientMessage(admin, { clientId, text, telegramMessageId: null });
 
@@ -135,6 +158,27 @@ Deno.serve(async (req) => {
         clarifyOptions: [],
         suggestions: result.suggestions,
         products: text,
+        escalated: false,
+      });
+    }
+
+    // Weekly meal plan: a dedicated generator (not the recipe engine), honouring
+    // the user's dietary preferences.
+    if (mode === "weekplan") {
+      const { data: pref } = await admin
+        .from("client_preferences")
+        .select("dietary_notes")
+        .eq("client_id", clientId)
+        .maybeSingle();
+      const plan = stripMarkdown(
+        await generateWeekPlan((pref as { dietary_notes?: string } | null)?.dietary_notes ?? null),
+      );
+      await insertBotMessage(admin, clientId, plan);
+      return jsonResponse({
+        text: plan,
+        recipeId: null,
+        clarifyOptions: [],
+        suggestions: [],
         escalated: false,
       });
     }

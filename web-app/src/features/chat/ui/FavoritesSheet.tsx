@@ -11,7 +11,7 @@ export default function FavoritesSheet({
   onPick,
 }: {
   onClose: () => void;
-  onPick: (title: string) => void;
+  onPick: (recipeId: number) => void;
 }) {
   const [items, setItems] = useState<Fav[] | null>(null);
 
@@ -42,7 +42,7 @@ export default function FavoritesSheet({
             <li key={f.recipe_id} className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => onPick(f.title)}
+                onClick={() => onPick(f.recipe_id)}
                 className="flex-1 text-left text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 {f.title}
