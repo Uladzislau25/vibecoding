@@ -11,6 +11,7 @@ import { detectCasual, extractServings, pickRandom, stripMarkdown } from "../_sh
 import { deriveContextQuery, gatherChatContext } from "../telegram-webhook/lib/context.ts";
 import { withServings } from "../telegram-webhook/lib/prompt.ts";
 import { buildRecipeReply } from "../telegram-webhook/features/recipe-reply.ts";
+import { suggestDishes } from "../telegram-webhook/api/deepseek.ts";
 import { insertBotMessage, insertClientMessage } from "../telegram-webhook/api/messages.repo.ts";
 import { markEscalated } from "../telegram-webhook/api/clients.repo.ts";
 import { FAREWELL_REPLIES, GRATITUDE_REPLIES, GREETING_REPLIES } from "../telegram-webhook/_config.ts";
@@ -79,6 +80,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => null);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text) return jsonResponse({ error: "text is required" }, 400);
+  const mode = body?.mode === "suggest" ? "suggest" : "recipe";
 
   const meta: WebUserMeta = {
     firstName:
@@ -94,6 +96,48 @@ Deno.serve(async (req) => {
   try {
     // Persist the user's message first so it is part of the gathered history.
     await insertClientMessage(admin, { clientId, text, telegramMessageId: null });
+
+    // "What can I cook from these products?" flow: the user pasted a list of
+    // ingredients and wants dish ideas, not a full recipe. We answer with a few
+    // suggestions; picking one later runs the normal recipe engine.
+    if (mode === "suggest") {
+      const { settings, systemPrompt } = await gatherChatContext(admin, clientId);
+      const result = await suggestDishes(
+        settings.model,
+        systemPrompt,
+        text,
+        settings.temperature,
+        settings.max_tokens,
+      );
+
+      if (!result.can_help) {
+        const reply =
+          "Хм, не похоже на список продуктов 🤔 Напишите, что у вас есть — например: «курица, рис, морковь, лук».";
+        await insertBotMessage(admin, clientId, reply);
+        return jsonResponse({
+          text: reply,
+          recipeId: null,
+          clarifyOptions: [],
+          suggestions: [],
+          products: text,
+          escalated: false,
+        });
+      }
+
+      const intro = "Вот что можно приготовить из этих продуктов — выберите блюдо, и пришлю рецепт:";
+      const historyText = intro + "\n\n" +
+        result.suggestions.map((s) => `• ${s.title} — ${s.description}`).join("\n");
+      await insertBotMessage(admin, clientId, historyText, null, result.usage);
+
+      return jsonResponse({
+        text: intro,
+        recipeId: null,
+        clarifyOptions: [],
+        suggestions: result.suggestions,
+        products: text,
+        escalated: false,
+      });
+    }
 
     // Greetings / thanks / goodbyes: reply casually instead of running the recipe
     // engine (which would escalate a "Привет" as a non-culinary request).

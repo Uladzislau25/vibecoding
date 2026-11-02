@@ -6,12 +6,16 @@ import { formatRecipe, titleFromText, type RecipeRow } from "@/features/chat/lib
 import FavoritesSheet from "./FavoritesSheet";
 import PreferencesSheet from "./PreferencesSheet";
 
+export type DishSuggestion = { title: string; description: string };
+
 export type ChatMessage = {
   role: "user" | "bot";
   text: string;
   recipeId?: number | null;
   title?: string | null;
   clarify?: string[];
+  suggestions?: DishSuggestion[];
+  products?: string;
 };
 
 const RECIPE_COLS = "id, title, ingredients, instructions, calories, protein, fat, carbs, cook_time, servings";
@@ -33,6 +37,7 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
   const [rated, setRated] = useState<Record<number, number>>({});
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [sheet, setSheet] = useState<"none" | "favorites" | "preferences">("none");
+  const [ingredientsMode, setIngredientsMode] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,19 +48,21 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     setMessages((prev) => [...prev, { role: "bot", text, recipeId, title }]);
   }
 
-  async function send(text: string) {
+  async function send(text: string, opts?: { mode?: "suggest" }) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
 
+    const suggestMode = opts?.mode === "suggest";
     setInput("");
     setError(null);
+    setIngredientsMode(false);
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setSending(true);
 
     try {
       const supabase = getSupabaseBrowser();
       const { data, error: fnError } = await supabase.functions.invoke("web-chat", {
-        body: { text: trimmed },
+        body: suggestMode ? { text: trimmed, mode: "suggest" } : { text: trimmed },
       });
       if (fnError) throw fnError;
 
@@ -66,6 +73,8 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
           text: data.text as string,
           recipeId: data.recipeId as number | null,
           clarify: (data.clarifyOptions as string[]) ?? [],
+          suggestions: (data.suggestions as DishSuggestion[]) ?? [],
+          products: (data.products as string) ?? null,
         },
       ]);
     } catch {
@@ -73,6 +82,14 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     } finally {
       setSending(false);
     }
+  }
+
+  // Entry point for "what can I cook from these products?": prime the input so
+  // the next message is sent in suggest mode instead of straight recipe generation.
+  function startIngredientsMode() {
+    if (sending) return;
+    setIngredientsMode(true);
+    pushBot("Перечислите продукты, которые у вас есть (через запятую) — подскажу, что из них можно приготовить 🧺");
   }
 
   async function randomRecipe() {
@@ -117,9 +134,13 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
     await getSupabaseBrowser().rpc("save_favorite", { p_recipe_id: recipeId, p_title: title });
   }
 
+  function submitInput() {
+    send(input, ingredientsMode ? { mode: "suggest" } : undefined);
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    send(input);
+    submitInput();
   }
 
   const showInitialChips = messages.length <= 1 && !sending;
@@ -152,6 +173,33 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
                     >
                       {opt}
                     </button>
+                  ))}
+                </div>
+              )}
+
+              {m.role === "bot" && m.suggestions && m.suggestions.length > 0 && (
+                <div className="mt-2 flex flex-col gap-2">
+                  {m.suggestions.map((dish) => (
+                    <div
+                      key={dish.title}
+                      className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 py-3"
+                    >
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{dish.title}</div>
+                      {dish.description && (
+                        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{dish.description}</div>
+                      )}
+                      <button
+                        type="button"
+                        disabled={sending}
+                        onClick={() =>
+                          send(
+                            `Приготовь «${dish.title}» строго из этих продуктов: ${m.products ?? ""}`.trim(),
+                          )}
+                        className="mt-2 text-sm px-3 py-1.5 rounded-xl bg-orange-600 text-white font-medium hover:bg-orange-700 active:bg-orange-800 disabled:opacity-50 transition-colors"
+                      >
+                        Рецепт →
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -225,6 +273,9 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
         <button type="button" onClick={randomRecipe} disabled={sending} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
           🎲 Случайный
         </button>
+        <button type="button" onClick={startIngredientsMode} disabled={sending} className={`shrink-0 text-sm px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${ingredientsMode ? "border-orange-400 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300" : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+          🧺 Что из продуктов?
+        </button>
         <button type="button" onClick={() => setSheet("favorites")} className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
           ⭐ Избранное
         </button>
@@ -243,11 +294,11 @@ export default function ChatClient({ initialMessages }: { initialMessages: ChatM
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              send(input);
+              submitInput();
             }
           }}
           rows={1}
-          placeholder="Что готовим?"
+          placeholder={ingredientsMode ? "Например: курица, рис, морковь, лук…" : "Что готовим?"}
           className="flex-1 resize-none rounded-2xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2.5 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors max-h-32"
         />
         <button
